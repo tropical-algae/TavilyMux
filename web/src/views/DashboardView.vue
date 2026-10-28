@@ -7,22 +7,26 @@ import { api, errorMessage } from "../api/client"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
-import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
+import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useToastStore } from "../stores/toasts"
 import type { CreatedPool, Dashboard, Pool, RoutingStrategy } from "../types/api"
 import { formatDate, formatLatency, formatNumber } from "../utils/format"
 
 const dashboard = ref<Dashboard | null>(null)
 const pools = ref<Pool[]>([])
-const loading = ref(true)
-const showSkeleton = useDelayedSkeleton(loading)
+const { loading, run: runLoad, showSkeleton } = useLoadingBoundary()
 const saving = ref(false)
 const createOpen = ref(false)
 const loadError = ref("")
 const formError = ref("")
 const created = ref<CreatedPool | null>(null)
 const toasts = useToastStore()
+const routingOptions = [
+  { value: "max_remaining", label: "剩余额度优先" },
+  { value: "random", label: "随机可用 Key" },
+]
 const form = reactive({
   name: "",
   description: "",
@@ -49,20 +53,19 @@ const searchExample = computed(() => {
 })
 
 async function load(): Promise<void> {
-  loading.value = true
-  loadError.value = ""
-  try {
-    const [dashboardResponse, poolResponse] = await Promise.all([
-      api.get<Dashboard>("/dashboard"),
-      api.get<Pool[]>("/pools"),
-    ])
-    dashboard.value = dashboardResponse.data
-    pools.value = poolResponse.data
-  } catch (cause) {
-    loadError.value = errorMessage(cause, "账号池数据加载失败")
-  } finally {
-    loading.value = false
-  }
+  await runLoad(async () => {
+    try {
+      const [dashboardResponse, poolResponse] = await Promise.all([
+        api.get<Dashboard>("/dashboard"),
+        api.get<Pool[]>("/pools"),
+      ])
+      dashboard.value = dashboardResponse.data
+      pools.value = poolResponse.data
+      loadError.value = ""
+    } catch (cause) {
+      loadError.value = errorMessage(cause, "账号池数据加载失败")
+    }
+  })
 }
 
 async function createPool(): Promise<void> {
@@ -295,13 +298,10 @@ onMounted(load)
                   placeholder="例如：生产搜索"
                 />
               </label>
-              <label class="field">
+              <div class="field">
                 <span>路由策略</span>
-                <select v-model="form.strategy">
-                  <option value="max_remaining">剩余额度优先</option>
-                  <option value="random">随机可用 Key</option>
-                </select>
-              </label>
+                <SelectControl v-model="form.strategy" :options="routingOptions" />
+              </div>
               <label class="field field--span">
                 <span>描述（可选）</span>
                 <textarea

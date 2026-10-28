@@ -4,18 +4,19 @@ import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 
 import { api, errorMessage } from "../api/client"
+import DateTimeControl from "../components/DateTimeControl.vue"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
-import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
+import SelectControl from "../components/SelectControl.vue"
+import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import type { PaginatedLogs, Pool, ProxyLog, TavilyKey } from "../types/api"
 import { formatDate, formatLatency } from "../utils/format"
 
 const logs = ref<PaginatedLogs | null>(null)
 const pools = ref<Pool[]>([])
 const keys = ref<TavilyKey[]>([])
-const loading = ref(true)
-const showSkeleton = useDelayedSkeleton(loading)
+const { initialized, loading, run: runLoad, showSkeleton } = useLoadingBoundary()
 const error = ref("")
 const expanded = ref(new Set<string>())
 const filtersOpen = ref(false)
@@ -47,6 +48,25 @@ const activeFilterCount = computed(
     ].filter(Boolean).length,
 )
 
+const poolOptions = computed(() => [
+  { value: "", label: "全部账号池" },
+  ...pools.value.map((pool) => ({ value: pool.id, label: pool.name })),
+])
+const keyOptions = computed(() => [
+  { value: "", label: "全部 Key" },
+  ...keys.value.map((key) => ({ value: key.id, label: key.name })),
+])
+const resultOptions = [
+  { value: "", label: "全部结果" },
+  { value: "true", label: "成功" },
+  { value: "false", label: "失败" },
+]
+const retryOptions = [
+  { value: "", label: "全部请求" },
+  { value: "true", label: "发生切换" },
+  { value: "false", label: "未切换" },
+]
+
 async function loadKeys(selectedKeyId = ""): Promise<void> {
   filters.value.key_id = ""
   if (!filters.value.pool_id) {
@@ -63,37 +83,42 @@ async function loadKeys(selectedKeyId = ""): Promise<void> {
   }
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = ""
-  try {
-    const params = {
-      page: filters.value.page,
-      page_size: filters.value.page_size,
-      pool_id: filters.value.pool_id || undefined,
-      key_id: filters.value.key_id || undefined,
-      status_code: filters.value.status_code || undefined,
-      success: filters.value.success || undefined,
-      retried: filters.value.retried || undefined,
-      request_id: filters.value.request_id || undefined,
-      time_from: filters.value.time_from
-        ? new Date(filters.value.time_from).toISOString()
-        : undefined,
-      time_to: filters.value.time_to
-        ? new Date(filters.value.time_to).toISOString()
-        : undefined,
-    }
-    const [logResponse, poolResponse] = await Promise.all([
-      api.get<PaginatedLogs>("/logs", { params }),
-      pools.value.length ? Promise.resolve({ data: pools.value }) : api.get<Pool[]>("/pools"),
-    ])
-    logs.value = logResponse.data
-    pools.value = poolResponse.data
-  } catch (cause) {
-    error.value = errorMessage(cause, "请求日志加载失败")
-  } finally {
-    loading.value = false
+async function fetchLogs(): Promise<void> {
+  const params = {
+    page: filters.value.page,
+    page_size: filters.value.page_size,
+    pool_id: filters.value.pool_id || undefined,
+    key_id: filters.value.key_id || undefined,
+    status_code: filters.value.status_code || undefined,
+    success: filters.value.success || undefined,
+    retried: filters.value.retried || undefined,
+    request_id: filters.value.request_id || undefined,
+    time_from: filters.value.time_from
+      ? new Date(filters.value.time_from).toISOString()
+      : undefined,
+    time_to: filters.value.time_to ? new Date(filters.value.time_to).toISOString() : undefined,
   }
+  const [logResponse, poolResponse] = await Promise.all([
+    api.get<PaginatedLogs>("/logs", { params }),
+    pools.value.length ? Promise.resolve({ data: pools.value }) : api.get<Pool[]>("/pools"),
+  ])
+  logs.value = logResponse.data
+  pools.value = poolResponse.data
+}
+
+async function runDataLoad(operation: () => Promise<void>): Promise<void> {
+  await runLoad(async () => {
+    try {
+      await operation()
+      error.value = ""
+    } catch (cause) {
+      error.value = errorMessage(cause, "请求日志加载失败")
+    }
+  })
+}
+
+async function load(): Promise<void> {
+  await runDataLoad(fetchLogs)
 }
 
 function toggle(log: ProxyLog): void {
@@ -136,10 +161,14 @@ function nextPage(): void {
   void load()
 }
 
-onMounted(async () => {
-  await loadKeys(typeof route.query.key_id === "string" ? route.query.key_id : "")
-  await load()
-})
+onMounted(() =>
+  runDataLoad(async () => {
+    await Promise.all([
+      loadKeys(typeof route.query.key_id === "string" ? route.query.key_id : ""),
+      fetchLogs(),
+    ])
+  }),
+)
 </script>
 
 <template>
@@ -168,158 +197,164 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <form
-      class="filter-bar"
-      :class="{ 'filter-bar--open': filtersOpen }"
-      @submit.prevent="applyFilters"
-    >
-      <div class="filter-bar__mobile-header">
-        <div>
-          <h2>筛选请求</h2>
-          <p>组合条件快速定位一次调用链。</p>
-        </div>
-        <button
-          class="icon-button"
-          type="button"
-          aria-label="关闭筛选"
-          @click="filtersOpen = false"
-        >
-          <X :size="18" />
-        </button>
-      </div>
-      <label
-        ><span>账号池</span
-        ><select v-model="filters.pool_id" @change="loadKeys()">
-          <option value="">全部账号池</option>
-          <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.name }}</option>
-        </select></label
-      >
-      <label
-        ><span>Tavily Key</span
-        ><select v-model="filters.key_id" :disabled="!filters.pool_id">
-          <option value="">全部 Key</option>
-          <option v-for="key in keys" :key="key.id" :value="key.id">{{ key.name }}</option>
-        </select></label
-      >
-      <label
-        ><span>状态码</span
-        ><input v-model="filters.status_code" inputmode="numeric" placeholder="例如 200 / 429"
-      /></label>
-      <label
-        ><span>结果</span
-        ><select v-model="filters.success">
-          <option value="">全部结果</option>
-          <option value="true">成功</option>
-          <option value="false">失败</option>
-        </select></label
-      >
-      <label
-        ><span>自动切换</span
-        ><select v-model="filters.retried">
-          <option value="">全部请求</option>
-          <option value="true">发生切换</option>
-          <option value="false">未切换</option>
-        </select></label
-      >
-      <label
-        ><span>请求 ID</span
-        ><input v-model.trim="filters.request_id" placeholder="内部或外部请求 ID"
-      /></label>
-      <label
-        ><span>开始时间</span><input v-model="filters.time_from" type="datetime-local"
-      /></label>
-      <label
-        ><span>结束时间</span><input v-model="filters.time_to" type="datetime-local"
-      /></label>
-      <div class="filter-actions">
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="!activeFilterCount"
-          @click="clearFilters"
-        >
-          重置
-        </button>
-        <button class="button button--primary" type="submit">应用筛选</button>
-      </div>
-    </form>
-
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
       <button class="button button--secondary" @click="load">重新加载</button>
     </div>
-    <EmptyState
-      v-else-if="!logs?.items.length"
-      title="没有符合条件的请求"
-      description="调整筛选条件，或先通过任意中转 Key 调用 /search。"
-    />
-    <section v-else class="log-stream">
-      <article v-for="log in logs.items" :key="log.id" class="log-entry">
-        <button
-          class="log-entry__summary"
-          type="button"
-          :aria-expanded="expanded.has(log.id)"
-          @click="toggle(log)"
-        >
-          <ChevronDown v-if="expanded.has(log.id)" :size="17" /><ChevronRight
-            v-else
-            :size="17"
-          />
-          <time>{{ formatDate(log.created_at) }}</time>
-          <code>{{ log.id }}</code>
-          <span
-            class="http-status"
-            :class="{ 'http-status--error': !log.status_code || log.status_code >= 400 }"
-            >{{ log.status_code ?? "ERR" }}</span
-          >
-          <span>{{ log.attempt_count }} 次尝试</span>
-          <strong>{{ formatLatency(log.latency_ms) }}</strong>
-        </button>
-        <div v-if="expanded.has(log.id)" class="attempt-trace">
-          <div class="attempt-trace__meta">
-            <span
-              >最终 Key：<code>{{ log.final_key_id || "未选择" }}</code></span
-            ><span
-              >外部请求 ID：<code>{{ log.external_request_id || "未提供" }}</code></span
-            >
+    <template v-else-if="initialized">
+      <form
+        class="filter-bar"
+        :class="{ 'filter-bar--open': filtersOpen }"
+        @submit.prevent="applyFilters"
+      >
+        <div class="filter-bar__mobile-header">
+          <div>
+            <h2>筛选请求</h2>
+            <p>组合条件快速定位一次调用链。</p>
           </div>
-          <ol>
-            <li v-for="attempt in log.attempts" :key="attempt.attempt_no">
-              <span
-                class="attempt-trace__node"
-                :class="{
-                  'attempt-trace__node--error':
-                    !attempt.status_code || attempt.status_code >= 400,
-                }"
-              ></span>
-              <div>
-                <strong
-                  >第 {{ attempt.attempt_no }} 次 ·
-                  {{ attempt.status_code ?? "网络错误" }}</strong
-                ><code>{{ attempt.key_id || "Key 已删除" }}</code>
-              </div>
-              <span>{{ attempt.error_type || "完成" }}</span>
-              <time>{{ formatLatency(attempt.latency_ms) }}</time>
-            </li>
-          </ol>
-        </div>
-      </article>
-      <footer class="pagination">
-        <span>共 {{ logs.total }} 条</span>
-        <div>
-          <button class="button button--tiny" :disabled="logs.page <= 1" @click="previousPage">
-            上一页</button
-          ><span>第 {{ logs.page }} 页</span
-          ><button
-            class="button button--tiny"
-            :disabled="logs.page * logs.page_size >= logs.total"
-            @click="nextPage"
+          <button
+            class="icon-button"
+            type="button"
+            aria-label="关闭筛选"
+            @click="filtersOpen = false"
           >
-            下一页
+            <X :size="18" />
           </button>
         </div>
-      </footer>
-    </section>
+        <div class="filter-field">
+          <span>账号池</span>
+          <SelectControl
+            v-model="filters.pool_id"
+            :options="poolOptions"
+            @change="loadKeys()"
+          />
+        </div>
+        <div class="filter-field">
+          <span>Tavily Key</span>
+          <SelectControl
+            v-model="filters.key_id"
+            :options="keyOptions"
+            :disabled="!filters.pool_id"
+          />
+        </div>
+        <label>
+          <span>状态码</span>
+          <input
+            v-model="filters.status_code"
+            inputmode="numeric"
+            placeholder="例如 200 / 429"
+          />
+        </label>
+        <div class="filter-field">
+          <span>结果</span>
+          <SelectControl v-model="filters.success" :options="resultOptions" />
+        </div>
+        <div class="filter-field">
+          <span>自动切换</span>
+          <SelectControl v-model="filters.retried" :options="retryOptions" />
+        </div>
+        <label>
+          <span>请求 ID</span>
+          <input v-model.trim="filters.request_id" placeholder="内部或外部请求 ID" />
+        </label>
+        <div class="filter-field">
+          <span>开始时间</span>
+          <DateTimeControl v-model="filters.time_from" aria-label="开始时间" />
+        </div>
+        <div class="filter-field">
+          <span>结束时间</span>
+          <DateTimeControl v-model="filters.time_to" aria-label="结束时间" />
+        </div>
+        <div class="filter-actions">
+          <button
+            class="button button--ghost"
+            type="button"
+            :disabled="!activeFilterCount"
+            @click="clearFilters"
+          >
+            重置
+          </button>
+          <button class="button button--primary" type="submit">应用筛选</button>
+        </div>
+      </form>
+
+      <EmptyState
+        v-if="!logs?.items.length"
+        title="没有符合条件的请求"
+        description="调整筛选条件，或先通过任意中转 Key 调用 /search。"
+      />
+      <section v-else class="log-stream">
+        <article v-for="log in logs.items" :key="log.id" class="log-entry">
+          <button
+            class="log-entry__summary"
+            type="button"
+            :aria-expanded="expanded.has(log.id)"
+            @click="toggle(log)"
+          >
+            <ChevronDown v-if="expanded.has(log.id)" :size="17" /><ChevronRight
+              v-else
+              :size="17"
+            />
+            <time>{{ formatDate(log.created_at) }}</time>
+            <code>{{ log.id }}</code>
+            <span
+              class="http-status"
+              :class="{ 'http-status--error': !log.status_code || log.status_code >= 400 }"
+              >{{ log.status_code ?? "ERR" }}</span
+            >
+            <span>{{ log.attempt_count }} 次尝试</span>
+            <strong>{{ formatLatency(log.latency_ms) }}</strong>
+          </button>
+          <div v-if="expanded.has(log.id)" class="attempt-trace">
+            <div class="attempt-trace__meta">
+              <span
+                >最终 Key：<code>{{ log.final_key_id || "未选择" }}</code></span
+              ><span
+                >外部请求 ID：<code>{{ log.external_request_id || "未提供" }}</code></span
+              >
+            </div>
+            <ol>
+              <li v-for="attempt in log.attempts" :key="attempt.attempt_no">
+                <span
+                  class="attempt-trace__node"
+                  :class="{
+                    'attempt-trace__node--error':
+                      !attempt.status_code || attempt.status_code >= 400,
+                  }"
+                ></span>
+                <div>
+                  <strong
+                    >第 {{ attempt.attempt_no }} 次 ·
+                    {{ attempt.status_code ?? "网络错误" }}</strong
+                  ><code>{{ attempt.key_id || "Key 已删除" }}</code>
+                </div>
+                <span>{{ attempt.error_type || "完成" }}</span>
+                <time>{{ formatLatency(attempt.latency_ms) }}</time>
+              </li>
+            </ol>
+          </div>
+        </article>
+        <footer class="pagination">
+          <span>共 {{ logs.total }} 条</span>
+          <div>
+            <button
+              class="button button--tiny"
+              :disabled="logs.page <= 1"
+              @click="previousPage"
+            >
+              上一页</button
+            ><span>第 {{ logs.page }} 页</span
+            ><button
+              class="button button--tiny"
+              :disabled="logs.page * logs.page_size >= logs.total"
+              @click="nextPage"
+            >
+              下一页
+            </button>
+          </div>
+        </footer>
+      </section>
+    </template>
   </div>
 </template>

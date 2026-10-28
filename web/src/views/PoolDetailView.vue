@@ -21,9 +21,10 @@ import { api, errorMessage } from "../api/client"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
 import UsageTimeline from "../components/UsageTimeline.vue"
-import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
+import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useToastStore } from "../stores/toasts"
 import type {
   CreatedRelayKey,
@@ -49,8 +50,10 @@ const snapshots = ref<UsageSnapshot[]>([])
 const selectedKeyId = ref("")
 const activeTab = ref<Tab>("overview")
 const expandedLogs = ref(new Set<string>())
-const loading = ref(true)
-const showSkeleton = useDelayedSkeleton(loading)
+const { run: runLoad, showSkeleton } = useLoadingBoundary()
+const { run: runUsageLoad, showSkeleton: showUsageSkeleton } = useLoadingBoundary({
+  skeletonOnRefresh: true,
+})
 const busyKey = ref("")
 const error = ref("")
 const keyFormOpen = ref(false)
@@ -76,6 +79,13 @@ const settingsForm = reactive({
   allow_direct_fallback: false,
 })
 const toasts = useToastStore()
+const hydratingUsage = ref(false)
+
+const routingOptions = [
+  { value: "max_remaining", label: "剩余额度优先" },
+  { value: "random", label: "随机可用 Key" },
+]
+const keyOptions = computed(() => keys.value.map((key) => ({ value: key.id, label: key.name })))
 
 const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: "overview", label: "概览", icon: Activity },
@@ -129,36 +139,55 @@ function quotaTone(usage: number | null, limit: number | null): string {
 }
 
 async function load(): Promise<void> {
-  loading.value = true
-  error.value = ""
-  try {
-    const [poolResponse, keyResponse, relayResponse, logResponse] = await Promise.all([
-      api.get<Pool>(`/pools/${poolId.value}`),
-      api.get<TavilyKey[]>(`/pools/${poolId.value}/keys`),
-      api.get<RelayKey[]>(`/pools/${poolId.value}/relay-keys`),
-      api.get<PaginatedLogs>("/logs", { params: { pool_id: poolId.value, page_size: 8 } }),
-    ])
-    pool.value = poolResponse.data
-    keys.value = keyResponse.data
-    relayKeys.value = relayResponse.data
-    logs.value = logResponse.data
-    syncSettings()
-    if (!selectedKeyId.value && keys.value[0]) selectedKeyId.value = keys.value[0].id
-  } catch (cause) {
-    error.value = errorMessage(cause, "账号池详情加载失败")
-  } finally {
-    loading.value = false
-  }
+  await runLoad(async () => {
+    try {
+      const [poolResponse, keyResponse, relayResponse, logResponse] = await Promise.all([
+        api.get<Pool>(`/pools/${poolId.value}`),
+        api.get<TavilyKey[]>(`/pools/${poolId.value}/keys`),
+        api.get<RelayKey[]>(`/pools/${poolId.value}/relay-keys`),
+        api.get<PaginatedLogs>("/logs", {
+          params: { pool_id: poolId.value, page_size: 8 },
+        }),
+      ])
+      const selectedKey =
+        keyResponse.data.find((key) => key.id === selectedKeyId.value) ?? keyResponse.data[0]
+      const usage = selectedKey
+        ? await api
+            .get<UsageSnapshot[]>(`/pools/${poolId.value}/keys/${selectedKey.id}/usage`)
+            .then((response) => response.data)
+            .catch(() => [])
+        : []
+
+      pool.value = poolResponse.data
+      keys.value = keyResponse.data
+      relayKeys.value = relayResponse.data
+      logs.value = logResponse.data
+      hydratingUsage.value = true
+      selectedKeyId.value = selectedKey?.id ?? ""
+      snapshots.value = usage
+      hydratingUsage.value = false
+      syncSettings()
+      error.value = ""
+    } catch (cause) {
+      error.value = errorMessage(cause, "账号池详情加载失败")
+    }
+  })
 }
 
 async function loadUsage(keyId: string): Promise<void> {
-  if (!keyId) {
-    snapshots.value = []
-    return
-  }
-  snapshots.value = (
-    await api.get<UsageSnapshot[]>(`/pools/${poolId.value}/keys/${keyId}/usage`)
-  ).data
+  await runUsageLoad(async () => {
+    if (!keyId) {
+      snapshots.value = []
+      return
+    }
+    try {
+      snapshots.value = (
+        await api.get<UsageSnapshot[]>(`/pools/${poolId.value}/keys/${keyId}/usage`)
+      ).data
+    } catch {
+      snapshots.value = []
+    }
+  })
 }
 
 async function addKeys(): Promise<void> {
@@ -371,7 +400,13 @@ function toggleLog(logId: string): void {
   expandedLogs.value = next
 }
 
-watch(selectedKeyId, (value) => loadUsage(value).catch(() => (snapshots.value = [])))
+watch(
+  selectedKeyId,
+  (value) => {
+    if (!hydratingUsage.value) void loadUsage(value)
+  },
+  { flush: "sync" },
+)
 onMounted(load)
 </script>
 
@@ -426,13 +461,15 @@ onMounted(load)
               <h2>额度时间线</h2>
               <p>同时核对 Key 独立限额与账户额度，实际可用值用于路由排序。</p>
             </div>
-            <select v-if="keys.length" v-model="selectedKeyId" aria-label="选择 Tavily Key">
-              <option v-for="key in keys" :key="key.id" :value="key.id">
-                {{ key.name }}
-              </option>
-            </select>
+            <SelectControl
+              v-if="keys.length"
+              v-model="selectedKeyId"
+              :options="keyOptions"
+              aria-label="选择 Tavily Key"
+            />
           </div>
-          <UsageTimeline :snapshots="snapshots" />
+          <LoadingSkeleton v-if="showUsageSkeleton" class="skeleton--embedded" :rows="3" />
+          <UsageTimeline v-else :snapshots="snapshots" />
         </section>
         <section class="panel">
           <div class="section-heading">
@@ -784,15 +821,16 @@ onMounted(load)
         </form>
         <div class="credential-list">
           <article v-for="relay in relayKeys" :key="relay.id" class="credential-record">
-            <div>
-              <span class="credential-record__icon"><ShieldCheck :size="18" /></span>
+            <div class="credential-record__identity">
+              <span class="credential-record__icon"><KeyRound :size="18" /></span>
               <div>
-                <strong>{{ relay.name }}</strong
-                ><code>{{ relay.prefix }}_••••••••</code>
+                <strong>{{ relay.name }}</strong>
+                <code>{{ relay.prefix }}_••••••••</code>
               </div>
             </div>
-            <div>
-              <span>最近使用</span><strong>{{ formatDate(relay.last_used_at) }}</strong>
+            <div class="credential-record__last-used">
+              <span>最近使用</span>
+              <strong>{{ formatDate(relay.last_used_at) }}</strong>
             </div>
             <StatusBadge :status="relay.enabled ? 'available' : 'disabled'" />
             <div class="row-actions">
@@ -820,14 +858,13 @@ onMounted(load)
         </div>
         <div class="form-grid">
           <label class="field"
-            ><span>池名称</span><input v-model.trim="settingsForm.name" required /></label
-          ><label class="field"
-            ><span>路由策略</span
-            ><select v-model="settingsForm.strategy">
-              <option value="max_remaining">剩余额度优先</option>
-              <option value="random">随机可用 Key</option>
-            </select></label
-          ><label class="field field--span"
+            ><span>池名称</span><input v-model.trim="settingsForm.name" required
+          /></label>
+          <div class="field">
+            <span>路由策略</span>
+            <SelectControl v-model="settingsForm.strategy" :options="routingOptions" />
+          </div>
+          <label class="field field--span"
             ><span>描述</span><textarea v-model="settingsForm.description" rows="3" /></label
           ><label class="field"
             ><span>检测间隔（秒）</span

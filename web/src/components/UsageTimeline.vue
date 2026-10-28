@@ -82,15 +82,6 @@ function quotaPair(usage: number | null, limit: number | null, unlimited = false
   return `${used} / ${limit === null && unlimited ? "未设上限" : formatNumber(limit)}`
 }
 
-function bottleneckLabel(value: UsageSnapshot["quota_bottleneck"] | undefined): string {
-  return {
-    key: "Key 独立限额",
-    account: "账户额度",
-    both: "Key 与账户同时",
-    unknown: "尚未确定",
-  }[value ?? "unknown"]
-}
-
 const showPaygo = computed(
   () =>
     last.value !== null &&
@@ -114,9 +105,8 @@ function formatTimelineDate(value: string | null): string {
   <div v-if="snapshots.length" class="usage-timeline">
     <div class="usage-timeline__summary">
       <div>
-        <span>实际可用额度</span
-        ><strong>{{ formatNumber(last?.estimated_remaining ?? null) }}</strong
-        ><small>瓶颈：{{ bottleneckLabel(last?.quota_bottleneck) }}</small>
+        <span>实际可用额度</span>
+        <strong>{{ formatNumber(last?.estimated_remaining ?? null) }}</strong>
       </div>
       <div>
         <span>Key 用量 / 独立上限</span

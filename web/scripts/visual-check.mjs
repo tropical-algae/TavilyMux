@@ -354,7 +354,31 @@ try {
     true,
     (page) => page.getByRole("tab", { name: "Tavily Keys" }).click(),
   )
+  await capture(
+    browser,
+    "pool-access-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    (page) => page.getByRole("tab", { name: "中转凭证" }).click(),
+  )
+  await capture(
+    browser,
+    "pool-access-mobile",
+    { width: 390, height: 844 },
+    "/pools/pool-primary",
+    true,
+    (page) => page.getByRole("tab", { name: "中转凭证" }).click(),
+  )
   await capture(browser, "logs-desktop", { width: 1440, height: 1000 }, "/logs", true)
+  await capture(
+    browser,
+    "logs-select-desktop",
+    { width: 1440, height: 1000 },
+    "/logs",
+    true,
+    (page) => page.getByRole("combobox").first().click(),
+  )
   await capture(browser, "logs-mobile", { width: 390, height: 844 }, "/logs", true)
   await capture(browser, "settings-desktop", { width: 1440, height: 1000 }, "/settings", true)
   await capture(browser, "settings-mobile", { width: 390, height: 844 }, "/settings", true)

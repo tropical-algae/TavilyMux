@@ -5,15 +5,14 @@ import { onMounted, reactive, ref } from "vue"
 import { api, errorMessage } from "../api/client"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
-import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
+import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useAuthStore } from "../stores/auth"
 import { useToastStore } from "../stores/toasts"
 import type { ConnectionTest, SystemSettings } from "../types/api"
 import { formatLatency } from "../utils/format"
 
 const settings = ref<SystemSettings | null>(null)
-const loading = ref(true)
-const showSkeleton = useDelayedSkeleton(loading)
+const { initialized, run: runLoad, showSkeleton } = useLoadingBoundary()
 const saving = ref(false)
 const testing = ref(false)
 const connectionResult = ref<ConnectionTest | null>(null)
@@ -35,20 +34,19 @@ const toasts = useToastStore()
 const auth = useAuthStore()
 
 async function load(): Promise<void> {
-  loading.value = true
-  error.value = ""
-  try {
-    settings.value = (await api.get<SystemSettings>("/settings")).data
-    Object.assign(form, {
-      ...settings.value,
-      http_proxy: "",
-      https_proxy: "",
-    })
-  } catch (cause) {
-    error.value = errorMessage(cause, "设置加载失败")
-  } finally {
-    loading.value = false
-  }
+  await runLoad(async () => {
+    try {
+      settings.value = (await api.get<SystemSettings>("/settings")).data
+      Object.assign(form, {
+        ...settings.value,
+        http_proxy: "",
+        https_proxy: "",
+      })
+      error.value = ""
+    } catch (cause) {
+      error.value = errorMessage(cause, "设置加载失败")
+    }
+  })
 }
 
 async function save(): Promise<void> {
@@ -134,7 +132,7 @@ onMounted(load)
       <p>{{ error }}</p>
       <button class="button button--secondary" @click="load">重新加载</button>
     </div>
-    <template v-else>
+    <template v-else-if="initialized">
       <form class="panel settings-form" @submit.prevent="save">
         <div class="section-heading">
           <div>

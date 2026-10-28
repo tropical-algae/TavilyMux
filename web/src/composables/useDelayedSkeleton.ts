@@ -1,6 +1,7 @@
 import { onScopeDispose, readonly, ref, watch, type Ref } from "vue"
 
 import { SKELETON_TIMING } from "../config/experience"
+import { remainingVisibleTime } from "../utils/loading"
 
 interface SkeletonTiming {
   delayMs?: number
@@ -34,14 +35,14 @@ export function useDelayedSkeleton(loading: Ref<boolean>, timing: SkeletonTiming
         if (visible.value) return
         showTimer = setTimeout(() => {
           visible.value = true
-          shownAt = performance.now()
+          shownAt = Date.now()
           showTimer = undefined
         }, delayMs)
         return
       }
 
       if (!visible.value) return
-      const remaining = Math.max(0, minimumVisibleMs - (performance.now() - shownAt))
+      const remaining = remainingVisibleTime(shownAt, Date.now(), minimumVisibleMs)
       hideTimer = setTimeout(() => {
         visible.value = false
         hideTimer = undefined
