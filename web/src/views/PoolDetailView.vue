@@ -41,6 +41,7 @@ const route = useRoute()
 const router = useRouter()
 const poolId = computed(() => String(route.params.id))
 const pool = ref<Pool | null>(null)
+const poolDirectory = ref<Pool[]>([])
 const keys = ref<TavilyKey[]>([])
 const relayKeys = ref<RelayKey[]>([])
 const logs = ref<PaginatedLogs | null>(null)
@@ -74,6 +75,11 @@ const settingsForm = reactive({
   allow_direct_fallback: false,
 })
 const toasts = useToastStore()
+
+const directoryPools = computed(() => {
+  if (poolDirectory.value.length) return poolDirectory.value
+  return pool.value ? [pool.value] : []
+})
 
 const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: "overview", label: "概览", icon: Activity },
@@ -131,13 +137,16 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ""
   try {
-    const [poolResponse, keyResponse, relayResponse, logResponse] = await Promise.all([
-      api.get<Pool>(`/pools/${poolId.value}`),
-      api.get<TavilyKey[]>(`/pools/${poolId.value}/keys`),
-      api.get<RelayKey[]>(`/pools/${poolId.value}/relay-keys`),
-      api.get<PaginatedLogs>("/logs", { params: { pool_id: poolId.value, page_size: 8 } }),
-    ])
+    const [poolResponse, directoryResponse, keyResponse, relayResponse, logResponse] =
+      await Promise.all([
+        api.get<Pool>(`/pools/${poolId.value}`),
+        api.get<Pool[]>("/pools"),
+        api.get<TavilyKey[]>(`/pools/${poolId.value}/keys`),
+        api.get<RelayKey[]>(`/pools/${poolId.value}/relay-keys`),
+        api.get<PaginatedLogs>("/logs", { params: { pool_id: poolId.value, page_size: 8 } }),
+      ])
     pool.value = poolResponse.data
+    poolDirectory.value = directoryResponse.data
     keys.value = keyResponse.data
     relayKeys.value = relayResponse.data
     logs.value = logResponse.data
@@ -375,509 +384,569 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="view-stack">
-    <RouterLink class="back-link" to="/pools"><ArrowLeft :size="16" />返回账号池</RouterLink>
+  <div class="view-stack pool-detail-view">
     <LoadingSkeleton v-if="loading" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
       <button class="button button--secondary" @click="load">重新加载</button>
     </div>
     <template v-else-if="pool">
-      <PageHeader :title="pool.name" :description="pool.description || '这个池还没有描述。'">
-        <template #actions><StatusBadge :status="pool.status" /></template>
-      </PageHeader>
-
-      <nav class="tabs" role="tablist" aria-label="账号池详情">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          type="button"
-          role="tab"
-          :aria-selected="activeTab === tab.id"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          <component :is="tab.icon" :size="17" />{{ tab.label }}
-        </button>
-      </nav>
-
-      <template v-if="activeTab === 'overview'">
-        <section class="telemetry-rail telemetry-rail--compact">
-          <div>
-            <span>可用 Key</span
-            ><strong>{{ pool.available_key_count }} / {{ pool.key_count }}</strong>
-          </div>
-          <div>
-            <span>最高单 Key 可用额度</span
-            ><strong>{{ formatNumber(pool.estimated_remaining) }}</strong>
-          </div>
-          <div>
-            <span>路由策略</span
-            ><strong>{{ pool.strategy === "random" ? "随机可用" : "剩余额度优先" }}</strong>
-          </div>
-          <div>
-            <span>最大尝试</span><strong>{{ pool.max_attempts }} 次</strong>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>额度时间线</h2>
-              <p>同时核对 Key 独立限额与账户额度，实际可用值用于路由排序。</p>
-            </div>
-            <select v-if="keys.length" v-model="selectedKeyId" aria-label="选择 Tavily Key">
-              <option v-for="key in keys" :key="key.id" :value="key.id">{{ key.name }}</option>
-            </select>
-          </div>
-          <UsageTimeline :snapshots="snapshots" />
-        </section>
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>最近请求</h2>
-              <p>自动切换会以多次内部尝试呈现。</p>
-            </div>
-          </div>
-          <EmptyState
-            v-if="!logs?.items.length"
-            title="这个池还没有请求"
-            description="使用中转 Key 调用 /search 后即可观察路由结果。"
-          />
-          <div v-else class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>状态</th>
-                  <th>尝试</th>
-                  <th>耗时</th>
-                  <th>请求 ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="log in logs.items" :key="log.id">
-                  <td>{{ formatDate(log.created_at) }}</td>
-                  <td>
-                    <span
-                      class="http-status"
-                      :class="{
-                        'http-status--error': !log.status_code || log.status_code >= 400,
-                      }"
-                      >{{ log.status_code ?? "ERR" }}</span
-                    >
-                  </td>
-                  <td>{{ log.attempt_count }}</td>
-                  <td>{{ formatLatency(log.latency_ms) }}</td>
-                  <td>
-                    <code>{{ log.id.slice(0, 12) }}</code>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
-
-      <template v-else-if="activeTab === 'keys'">
-        <div class="section-actions">
-          <div>
-            <h2>Tavily Keys</h2>
-            <p>真实 Key 只加密保存，页面始终脱敏显示。</p>
-          </div>
-          <button
-            class="button button--primary"
-            type="button"
-            @click="keyFormOpen = !keyFormOpen"
+      <div class="pool-detail-shell">
+        <aside class="pool-detail-directory" aria-label="账号池目录">
+          <RouterLink class="back-link" to="/pools"
+            ><ArrowLeft :size="16" />全部账号池</RouterLink
           >
-            <Plus :size="17" />添加 Key
-          </button>
-        </div>
-        <form v-if="keyFormOpen" class="panel form-panel" @submit.prevent="addKeys">
-          <div class="segmented">
-            <button
-              type="button"
-              :class="{ active: keyMode === 'single' }"
-              @click="keyMode = 'single'"
+          <div class="pool-detail-directory__heading">
+            <strong>路由层级</strong>
+            <span>{{ directoryPools.length }} 个账号池</span>
+          </div>
+          <nav>
+            <RouterLink
+              v-for="directoryPool in directoryPools"
+              :key="directoryPool.id"
+              :to="`/pools/${directoryPool.id}`"
+              :class="{ active: directoryPool.id === pool.id }"
+              :aria-current="directoryPool.id === pool.id ? 'page' : undefined"
             >
-              单个添加</button
-            ><button
-              type="button"
-              :class="{ active: keyMode === 'bulk' }"
-              @click="keyMode = 'bulk'"
-            >
-              批量粘贴
-            </button>
-          </div>
-          <div v-if="keyMode === 'single'" class="form-grid">
-            <label class="field"
-              ><span>名称</span
-              ><input v-model.trim="keyForm.name" required placeholder="例如：主账号" /></label
-            ><label class="field"
-              ><span>Tavily API Key</span
-              ><input
-                v-model.trim="keyForm.api_key"
-                type="password"
-                required
-                autocomplete="off"
-                placeholder="tvly-…"
-            /></label>
-          </div>
-          <label v-else class="field"
-            ><span>每行一个 Key，可使用“名称,Key”格式</span
-            ><textarea
-              v-model="keyForm.bulk"
-              rows="7"
-              required
-              placeholder="主账号,tvly-…&#10;备用账号,tvly-…"
-            />
-          </label>
-          <div class="form-actions">
-            <button class="button button--primary" type="submit">添加并开始检测</button>
-          </div>
-        </form>
-        <EmptyState
-          v-if="keys.length === 0"
-          title="池里还没有 Tavily Key"
-          description="添加至少一个 Key 后，这个池才能接收搜索请求。"
-        />
-        <section v-else class="panel table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th>状态</th>
-                <th>额度</th>
-                <th>成功率</th>
-                <th>最后检测</th>
-                <th class="align-right">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="key in keys" :key="key.id">
-                <td>
-                  <strong>{{ key.name }}</strong
-                  ><code class="block-code">{{ key.masked_key }}</code>
-                </td>
-                <td>
-                  <StatusBadge :status="key.status" /><small v-if="key.last_error">{{
-                    key.last_error
-                  }}</small>
-                </td>
-                <td>
-                  <div class="quota-cell">
-                    <strong>{{ formatNumber(key.estimated_remaining) }} 可用</strong>
-                    <small>瓶颈：{{ bottleneckLabel(key.quota_bottleneck) }}</small>
-                    <small>Key：{{ quotaPair(key.usage, key.usage_limit, true) }}</small>
-                    <small
-                      >账户<span v-if="key.account_plan">（{{ key.account_plan }}）</span>：{{
-                        quotaPair(key.account_plan_usage, key.account_plan_limit)
-                      }}</small
-                    >
-                    <small v-if="key.paygo_limit !== null || (key.paygo_usage ?? 0) > 0"
-                      >PAYGO：{{ quotaPair(key.paygo_usage, key.paygo_limit) }}</small
-                    >
-                  </div>
-                </td>
-                <td>
-                  {{ successRate(key.success_count, key.request_count)
-                  }}<small>{{ key.request_count }} 次请求</small>
-                </td>
-                <td>
-                  {{ formatDate(key.last_checked_at) }}
-                  <small>使用：{{ formatDate(key.last_used_at) }}</small>
-                </td>
-                <td>
-                  <div class="row-actions">
-                    <button
-                      class="icon-button"
-                      type="button"
-                      :disabled="busyKey === key.id"
-                      :aria-label="`检测 ${key.name}`"
-                      @click="checkKey(key)"
-                    >
-                      <RefreshCw :size="16" :class="{ spin: busyKey === key.id }" /></button
-                    ><RouterLink
-                      class="icon-button"
-                      :to="`/logs?pool_id=${poolId}&key_id=${key.id}`"
-                      :aria-label="`查看 ${key.name} 的日志`"
-                    >
-                      <BookOpenText :size="16" /> </RouterLink
-                    ><button class="button button--tiny" type="button" @click="renameKey(key)">
-                      改名</button
-                    ><button class="button button--tiny" type="button" @click="toggleKey(key)">
-                      {{ key.enabled ? "停用" : "启用" }}</button
-                    ><button
-                      class="icon-button icon-button--danger"
-                      type="button"
-                      :aria-label="`删除 ${key.name}`"
-                      @click="deleteKey(key)"
-                    >
-                      <Trash2 :size="16" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-      </template>
-
-      <template v-else-if="activeTab === 'logs'">
-        <div class="section-actions">
-          <div>
-            <h2>这个池的最近请求</h2>
-            <p>展开可查看自动切换产生的每一次内部 Key 尝试。</p>
-          </div>
-          <RouterLink class="button button--secondary" :to="`/logs?pool_id=${poolId}`">
-            查看与筛选全部日志
-          </RouterLink>
-        </div>
-        <EmptyState
-          v-if="!logs?.items.length"
-          title="这个池还没有请求"
-          description="使用中转 Key 调用 /search 后即可查看完整尝试链。"
-        />
-        <section v-else class="log-stream">
-          <article v-for="log in logs.items" :key="log.id" class="log-entry">
-            <button
-              class="log-entry__summary"
-              type="button"
-              :aria-expanded="expandedLogs.has(log.id)"
-              @click="toggleLog(log.id)"
-            >
-              <ChevronDown v-if="expandedLogs.has(log.id)" :size="17" />
-              <ChevronRight v-else :size="17" />
-              <time>{{ formatDate(log.created_at) }}</time>
-              <code>{{ log.id }}</code>
               <span
-                class="http-status"
-                :class="{ 'http-status--error': !log.status_code || log.status_code >= 400 }"
-                >{{ log.status_code ?? "ERR" }}</span
-              >
-              <span>{{ log.attempt_count }} 次尝试</span>
-              <strong>{{ formatLatency(log.latency_ms) }}</strong>
-            </button>
-            <div v-if="expandedLogs.has(log.id)" class="attempt-trace">
-              <ol>
-                <li v-for="attempt in log.attempts" :key="attempt.attempt_no">
-                  <span
-                    class="attempt-trace__node"
-                    :class="{
-                      'attempt-trace__node--error':
-                        !attempt.status_code || attempt.status_code >= 400,
-                    }"
-                  ></span>
-                  <div>
-                    <strong>第 {{ attempt.attempt_no }} 次</strong>
-                    <code>{{ attempt.key_id || "Key 已删除" }}</code>
-                  </div>
-                  <span>{{ attempt.error_type || "完成" }}</span>
-                  <time>{{ formatLatency(attempt.latency_ms) }}</time>
-                </li>
-              </ol>
-            </div>
-          </article>
-        </section>
-      </template>
+                class="pool-detail-directory__signal"
+                :class="`pool-detail-directory__signal--${directoryPool.status}`"
+              ></span>
+              <span>
+                <strong>{{ directoryPool.name }}</strong>
+                <small
+                  >{{ directoryPool.available_key_count }}/{{ directoryPool.key_count }} Key
+                  可用</small
+                >
+              </span>
+              <ChevronRight :size="15" aria-hidden="true" />
+            </RouterLink>
+          </nav>
+        </aside>
 
-      <template v-else-if="activeTab === 'access'">
-        <div class="section-actions">
-          <div>
-            <h2>中转凭证</h2>
-            <p>调用方通过 Bearer 中转 Key 访问本服务的 /search。</p>
-          </div>
-          <button
-            class="button button--primary"
-            type="button"
-            @click="relayFormOpen = !relayFormOpen"
+        <section class="pool-detail-content">
+          <PageHeader
+            :title="pool.name"
+            :description="pool.description || '这个池还没有描述。'"
           >
-            <Plus :size="17" />生成凭证
-          </button>
-        </div>
-        <section v-if="oneTimeRelay" class="one-time-secret">
-          <div>
-            <h2>新 Key 只显示这一次</h2>
-            <p>复制后安全地交给调用方。</p>
-          </div>
-          <code>{{ oneTimeRelay.relay_key }}</code>
-          <div class="one-time-secret__actions">
-            <button class="button button--primary" type="button" @click="copyRelay">
-              <Copy :size="16" />复制</button
-            ><button class="button button--ghost" type="button" @click="oneTimeRelay = null">
-              <CheckCircle2 :size="16" />我已保存
+            <template #actions><StatusBadge :status="pool.status" /></template>
+          </PageHeader>
+
+          <nav class="tabs" role="tablist" aria-label="账号池详情">
+            <button
+              v-for="tab in tabs"
+              :key="tab.id"
+              type="button"
+              role="tab"
+              :aria-selected="activeTab === tab.id"
+              :class="{ active: activeTab === tab.id }"
+              @click="activeTab = tab.id"
+            >
+              <component :is="tab.icon" :size="17" />{{ tab.label }}
             </button>
-          </div>
-        </section>
-        <form v-if="relayFormOpen" class="panel inline-form" @submit.prevent="createRelay">
-          <label class="field"
-            ><span>凭证名称</span
-            ><input v-model.trim="relayName" required placeholder="例如：生产环境" /></label
-          ><button class="button button--primary" type="submit" :disabled="!relayName">
-            生成新的中转 Key
-          </button>
-        </form>
-        <div class="credential-list">
-          <article v-for="relay in relayKeys" :key="relay.id" class="credential-record">
-            <div>
-              <span class="credential-record__icon"><ShieldCheck :size="18" /></span>
+          </nav>
+
+          <template v-if="activeTab === 'overview'">
+            <section class="telemetry-rail telemetry-rail--compact">
               <div>
-                <strong>{{ relay.name }}</strong
-                ><code>{{ relay.prefix }}_••••••••</code>
+                <span>可用 Key</span
+                ><strong>{{ pool.available_key_count }} / {{ pool.key_count }}</strong>
               </div>
-            </div>
-            <div>
-              <span>最近使用</span><strong>{{ formatDate(relay.last_used_at) }}</strong>
-            </div>
-            <StatusBadge :status="relay.enabled ? 'available' : 'disabled'" />
-            <div class="row-actions">
-              <button class="button button--tiny" type="button" @click="toggleRelay(relay)">
-                {{ relay.enabled ? "停用" : "启用" }}</button
-              ><button
-                class="icon-button icon-button--danger"
+              <div>
+                <span>最高单 Key 可用额度</span
+                ><strong>{{ formatNumber(pool.estimated_remaining) }}</strong>
+              </div>
+              <div>
+                <span>路由策略</span
+                ><strong>{{ pool.strategy === "random" ? "随机可用" : "剩余额度优先" }}</strong>
+              </div>
+              <div>
+                <span>最大尝试</span><strong>{{ pool.max_attempts }} 次</strong>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>额度时间线</h2>
+                  <p>同时核对 Key 独立限额与账户额度，实际可用值用于路由排序。</p>
+                </div>
+                <select v-if="keys.length" v-model="selectedKeyId" aria-label="选择 Tavily Key">
+                  <option v-for="key in keys" :key="key.id" :value="key.id">
+                    {{ key.name }}
+                  </option>
+                </select>
+              </div>
+              <UsageTimeline :snapshots="snapshots" />
+            </section>
+            <section class="panel">
+              <div class="section-heading">
+                <div>
+                  <h2>最近请求</h2>
+                  <p>自动切换会以多次内部尝试呈现。</p>
+                </div>
+              </div>
+              <EmptyState
+                v-if="!logs?.items.length"
+                title="这个池还没有请求"
+                description="使用中转 Key 调用 /search 后即可观察路由结果。"
+              />
+              <div v-else class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>状态</th>
+                      <th>尝试</th>
+                      <th>耗时</th>
+                      <th>请求 ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="log in logs.items" :key="log.id">
+                      <td>{{ formatDate(log.created_at) }}</td>
+                      <td>
+                        <span
+                          class="http-status"
+                          :class="{
+                            'http-status--error': !log.status_code || log.status_code >= 400,
+                          }"
+                          >{{ log.status_code ?? "ERR" }}</span
+                        >
+                      </td>
+                      <td>{{ log.attempt_count }}</td>
+                      <td>{{ formatLatency(log.latency_ms) }}</td>
+                      <td>
+                        <code>{{ log.id.slice(0, 12) }}</code>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </template>
+
+          <template v-else-if="activeTab === 'keys'">
+            <div class="section-actions">
+              <div>
+                <h2>Tavily Keys</h2>
+                <p>真实 Key 只加密保存，页面始终脱敏显示。</p>
+              </div>
+              <button
+                class="button button--primary"
                 type="button"
-                aria-label="吊销凭证"
-                @click="deleteRelay(relay)"
+                @click="keyFormOpen = !keyFormOpen"
               >
-                <Trash2 :size="16" />
+                <Plus :size="17" />添加 Key
               </button>
             </div>
-          </article>
-        </div>
-      </template>
+            <form v-if="keyFormOpen" class="panel form-panel" @submit.prevent="addKeys">
+              <div class="segmented">
+                <button
+                  type="button"
+                  :class="{ active: keyMode === 'single' }"
+                  @click="keyMode = 'single'"
+                >
+                  单个添加</button
+                ><button
+                  type="button"
+                  :class="{ active: keyMode === 'bulk' }"
+                  @click="keyMode = 'bulk'"
+                >
+                  批量粘贴
+                </button>
+              </div>
+              <div v-if="keyMode === 'single'" class="form-grid">
+                <label class="field"
+                  ><span>名称</span
+                  ><input
+                    v-model.trim="keyForm.name"
+                    required
+                    placeholder="例如：主账号" /></label
+                ><label class="field"
+                  ><span>Tavily API Key</span
+                  ><input
+                    v-model.trim="keyForm.api_key"
+                    type="password"
+                    required
+                    autocomplete="off"
+                    placeholder="tvly-…"
+                /></label>
+              </div>
+              <label v-else class="field"
+                ><span>每行一个 Key，可使用“名称,Key”格式</span
+                ><textarea
+                  v-model="keyForm.bulk"
+                  rows="7"
+                  required
+                  placeholder="主账号,tvly-…&#10;备用账号,tvly-…"
+                />
+              </label>
+              <div class="form-actions">
+                <button class="button button--primary" type="submit">添加并开始检测</button>
+              </div>
+            </form>
+            <EmptyState
+              v-if="keys.length === 0"
+              title="池里还没有 Tavily Key"
+              description="添加至少一个 Key 后，这个池才能接收搜索请求。"
+            />
+            <section v-else class="panel table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>状态</th>
+                    <th>额度</th>
+                    <th>成功率</th>
+                    <th>最后检测</th>
+                    <th class="align-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="key in keys" :key="key.id">
+                    <td>
+                      <strong>{{ key.name }}</strong
+                      ><code class="block-code">{{ key.masked_key }}</code>
+                    </td>
+                    <td>
+                      <StatusBadge :status="key.status" /><small v-if="key.last_error">{{
+                        key.last_error
+                      }}</small>
+                    </td>
+                    <td>
+                      <div class="quota-cell">
+                        <strong>{{ formatNumber(key.estimated_remaining) }} 可用</strong>
+                        <small>瓶颈：{{ bottleneckLabel(key.quota_bottleneck) }}</small>
+                        <small>Key：{{ quotaPair(key.usage, key.usage_limit, true) }}</small>
+                        <small
+                          >账户<span v-if="key.account_plan">（{{ key.account_plan }}）</span
+                          >：{{
+                            quotaPair(key.account_plan_usage, key.account_plan_limit)
+                          }}</small
+                        >
+                        <small v-if="key.paygo_limit !== null || (key.paygo_usage ?? 0) > 0"
+                          >PAYGO：{{ quotaPair(key.paygo_usage, key.paygo_limit) }}</small
+                        >
+                      </div>
+                    </td>
+                    <td>
+                      {{ successRate(key.success_count, key.request_count)
+                      }}<small>{{ key.request_count }} 次请求</small>
+                    </td>
+                    <td>
+                      {{ formatDate(key.last_checked_at) }}
+                      <small>使用：{{ formatDate(key.last_used_at) }}</small>
+                    </td>
+                    <td>
+                      <div class="row-actions">
+                        <button
+                          class="icon-button"
+                          type="button"
+                          :disabled="busyKey === key.id"
+                          :aria-label="`检测 ${key.name}`"
+                          @click="checkKey(key)"
+                        >
+                          <RefreshCw :size="16" :class="{ spin: busyKey === key.id }" /></button
+                        ><RouterLink
+                          class="icon-button"
+                          :to="`/logs?pool_id=${poolId}&key_id=${key.id}`"
+                          :aria-label="`查看 ${key.name} 的日志`"
+                        >
+                          <BookOpenText :size="16" /> </RouterLink
+                        ><button
+                          class="button button--tiny"
+                          type="button"
+                          @click="renameKey(key)"
+                        >
+                          改名</button
+                        ><button
+                          class="button button--tiny"
+                          type="button"
+                          @click="toggleKey(key)"
+                        >
+                          {{ key.enabled ? "停用" : "启用" }}</button
+                        ><button
+                          class="icon-button icon-button--danger"
+                          type="button"
+                          :aria-label="`删除 ${key.name}`"
+                          @click="deleteKey(key)"
+                        >
+                          <Trash2 :size="16" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </template>
 
-      <form v-else class="panel settings-form" @submit.prevent="saveSettings">
-        <div class="section-heading">
-          <div>
-            <h2>池级路由设置</h2>
-            <p>保存后通过新的 Runtime 快照应用，不阻塞正在进行的请求。</p>
-          </div>
-        </div>
-        <div class="form-grid">
-          <label class="field"
-            ><span>池名称</span><input v-model.trim="settingsForm.name" required /></label
-          ><label class="field"
-            ><span>路由策略</span
-            ><select v-model="settingsForm.strategy">
-              <option value="max_remaining">剩余额度优先</option>
-              <option value="random">随机可用 Key</option>
-            </select></label
-          ><label class="field field--span"
-            ><span>描述</span><textarea v-model="settingsForm.description" rows="3" /></label
-          ><label class="field"
-            ><span>检测间隔（秒）</span
-            ><input
-              v-model.number="settingsForm.monitor_interval_seconds"
-              type="number"
-              min="60"
-              max="86400" /></label
-          ><label class="field"
-            ><span>最大尝试次数</span
-            ><input
-              v-model.number="settingsForm.max_attempts"
-              type="number"
-              min="1"
-              max="10" /></label
-          ><label class="field"
-            ><span>并发上限</span
-            ><input
-              v-model.number="settingsForm.concurrency_limit"
-              type="number"
-              min="1"
-              placeholder="不限制" /></label
-          ><label class="field"
-            ><span>每分钟请求上限</span
-            ><input
-              v-model.number="settingsForm.rpm_limit"
-              type="number"
-              min="1"
-              placeholder="不限制"
-          /></label>
-        </div>
-        <label class="switch-field"
-          ><input v-model="settingsForm.enabled" type="checkbox" /><span
-            ><strong>启用账号池</strong><small>停用后所有中转凭证会立即停止路由。</small></span
-          ></label
-        >
-        <div class="section-divider"></div>
-        <div class="section-heading">
-          <div>
-            <h2>连接覆盖</h2>
-            <p>默认继承全局 Tavily 地址和 Clash HTTP 代理；开启后仅影响这个池。</p>
-          </div>
-        </div>
-        <label class="switch-field"
-          ><input v-model="connectionOverride" type="checkbox" /><span
-            ><strong>覆盖全局连接配置</strong
-            ><small>关闭并保存会清除当前池的全部连接覆盖。</small></span
-          ></label
-        >
-        <div v-if="connectionOverride" class="form-grid">
-          <label class="field field--span"
-            ><span>Tavily Base URL（留空继承全局）</span
-            ><input
-              v-model.trim="settingsForm.upstream_base_url"
-              type="url"
-              placeholder="https://api.tavily.com"
-          /></label>
-          <div class="field">
-            <label for="pool-http-proxy">HTTP 代理</label>
-            <input
-              id="pool-http-proxy"
-              v-model.trim="settingsForm.http_proxy"
-              type="url"
-              :placeholder="pool.http_proxy || 'http://127.0.0.1:7890'"
-              @input="proxyTouched.http = true"
-            /><small v-if="pool.http_proxy && !proxyTouched.http"
-              >当前：{{ pool.http_proxy }}</small
-            ><button
-              v-if="pool.http_proxy"
-              class="field-action"
-              type="button"
-              @click="clearPoolProxy('http')"
+          <template v-else-if="activeTab === 'logs'">
+            <div class="section-actions">
+              <div>
+                <h2>这个池的最近请求</h2>
+                <p>展开可查看自动切换产生的每一次内部 Key 尝试。</p>
+              </div>
+              <RouterLink class="button button--secondary" :to="`/logs?pool_id=${poolId}`">
+                查看与筛选全部日志
+              </RouterLink>
+            </div>
+            <EmptyState
+              v-if="!logs?.items.length"
+              title="这个池还没有请求"
+              description="使用中转 Key 调用 /search 后即可查看完整尝试链。"
+            />
+            <section v-else class="log-stream">
+              <article v-for="log in logs.items" :key="log.id" class="log-entry">
+                <button
+                  class="log-entry__summary"
+                  type="button"
+                  :aria-expanded="expandedLogs.has(log.id)"
+                  @click="toggleLog(log.id)"
+                >
+                  <ChevronDown v-if="expandedLogs.has(log.id)" :size="17" />
+                  <ChevronRight v-else :size="17" />
+                  <time>{{ formatDate(log.created_at) }}</time>
+                  <code>{{ log.id }}</code>
+                  <span
+                    class="http-status"
+                    :class="{
+                      'http-status--error': !log.status_code || log.status_code >= 400,
+                    }"
+                    >{{ log.status_code ?? "ERR" }}</span
+                  >
+                  <span>{{ log.attempt_count }} 次尝试</span>
+                  <strong>{{ formatLatency(log.latency_ms) }}</strong>
+                </button>
+                <div v-if="expandedLogs.has(log.id)" class="attempt-trace">
+                  <ol>
+                    <li v-for="attempt in log.attempts" :key="attempt.attempt_no">
+                      <span
+                        class="attempt-trace__node"
+                        :class="{
+                          'attempt-trace__node--error':
+                            !attempt.status_code || attempt.status_code >= 400,
+                        }"
+                      ></span>
+                      <div>
+                        <strong>第 {{ attempt.attempt_no }} 次</strong>
+                        <code>{{ attempt.key_id || "Key 已删除" }}</code>
+                      </div>
+                      <span>{{ attempt.error_type || "完成" }}</span>
+                      <time>{{ formatLatency(attempt.latency_ms) }}</time>
+                    </li>
+                  </ol>
+                </div>
+              </article>
+            </section>
+          </template>
+
+          <template v-else-if="activeTab === 'access'">
+            <div class="section-actions">
+              <div>
+                <h2>中转凭证</h2>
+                <p>调用方通过 Bearer 中转 Key 访问本服务的 /search。</p>
+              </div>
+              <button
+                class="button button--primary"
+                type="button"
+                @click="relayFormOpen = !relayFormOpen"
+              >
+                <Plus :size="17" />生成凭证
+              </button>
+            </div>
+            <section v-if="oneTimeRelay" class="one-time-secret">
+              <div>
+                <h2>新 Key 只显示这一次</h2>
+                <p>复制后安全地交给调用方。</p>
+              </div>
+              <code>{{ oneTimeRelay.relay_key }}</code>
+              <div class="one-time-secret__actions">
+                <button class="button button--primary" type="button" @click="copyRelay">
+                  <Copy :size="16" />复制</button
+                ><button
+                  class="button button--ghost"
+                  type="button"
+                  @click="oneTimeRelay = null"
+                >
+                  <CheckCircle2 :size="16" />我已保存
+                </button>
+              </div>
+            </section>
+            <form v-if="relayFormOpen" class="panel inline-form" @submit.prevent="createRelay">
+              <label class="field"
+                ><span>凭证名称</span
+                ><input v-model.trim="relayName" required placeholder="例如：生产环境" /></label
+              ><button class="button button--primary" type="submit" :disabled="!relayName">
+                生成新的中转 Key
+              </button>
+            </form>
+            <div class="credential-list">
+              <article v-for="relay in relayKeys" :key="relay.id" class="credential-record">
+                <div>
+                  <span class="credential-record__icon"><ShieldCheck :size="18" /></span>
+                  <div>
+                    <strong>{{ relay.name }}</strong
+                    ><code>{{ relay.prefix }}_••••••••</code>
+                  </div>
+                </div>
+                <div>
+                  <span>最近使用</span><strong>{{ formatDate(relay.last_used_at) }}</strong>
+                </div>
+                <StatusBadge :status="relay.enabled ? 'available' : 'disabled'" />
+                <div class="row-actions">
+                  <button class="button button--tiny" type="button" @click="toggleRelay(relay)">
+                    {{ relay.enabled ? "停用" : "启用" }}</button
+                  ><button
+                    class="icon-button icon-button--danger"
+                    type="button"
+                    aria-label="吊销凭证"
+                    @click="deleteRelay(relay)"
+                  >
+                    <Trash2 :size="16" />
+                  </button>
+                </div>
+              </article>
+            </div>
+          </template>
+
+          <form v-else class="panel settings-form" @submit.prevent="saveSettings">
+            <div class="section-heading">
+              <div>
+                <h2>池级路由设置</h2>
+                <p>保存后通过新的 Runtime 快照应用，不阻塞正在进行的请求。</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label class="field"
+                ><span>池名称</span><input v-model.trim="settingsForm.name" required /></label
+              ><label class="field"
+                ><span>路由策略</span
+                ><select v-model="settingsForm.strategy">
+                  <option value="max_remaining">剩余额度优先</option>
+                  <option value="random">随机可用 Key</option>
+                </select></label
+              ><label class="field field--span"
+                ><span>描述</span
+                ><textarea v-model="settingsForm.description" rows="3" /></label
+              ><label class="field"
+                ><span>检测间隔（秒）</span
+                ><input
+                  v-model.number="settingsForm.monitor_interval_seconds"
+                  type="number"
+                  min="60"
+                  max="86400" /></label
+              ><label class="field"
+                ><span>最大尝试次数</span
+                ><input
+                  v-model.number="settingsForm.max_attempts"
+                  type="number"
+                  min="1"
+                  max="10" /></label
+              ><label class="field"
+                ><span>并发上限</span
+                ><input
+                  v-model.number="settingsForm.concurrency_limit"
+                  type="number"
+                  min="1"
+                  placeholder="不限制" /></label
+              ><label class="field"
+                ><span>每分钟请求上限</span
+                ><input
+                  v-model.number="settingsForm.rpm_limit"
+                  type="number"
+                  min="1"
+                  placeholder="不限制"
+              /></label>
+            </div>
+            <label class="switch-field"
+              ><input v-model="settingsForm.enabled" type="checkbox" /><span
+                ><strong>启用账号池</strong
+                ><small>停用后所有中转凭证会立即停止路由。</small></span
+              ></label
             >
-              清除池级 HTTP 代理
-            </button>
-          </div>
-          <div class="field">
-            <label for="pool-https-proxy">HTTPS 代理</label>
-            <input
-              id="pool-https-proxy"
-              v-model.trim="settingsForm.https_proxy"
-              type="url"
-              :placeholder="pool.https_proxy || 'http://127.0.0.1:7890'"
-              @input="proxyTouched.https = true"
-            /><small v-if="pool.https_proxy && !proxyTouched.https"
-              >当前：{{ pool.https_proxy }}</small
-            ><button
-              v-if="pool.https_proxy"
-              class="field-action"
-              type="button"
-              @click="clearPoolProxy('https')"
+            <div class="section-divider"></div>
+            <div class="section-heading">
+              <div>
+                <h2>连接覆盖</h2>
+                <p>默认继承全局 Tavily 地址和 Clash HTTP 代理；开启后仅影响这个池。</p>
+              </div>
+            </div>
+            <label class="switch-field"
+              ><input v-model="connectionOverride" type="checkbox" /><span
+                ><strong>覆盖全局连接配置</strong
+                ><small>关闭并保存会清除当前池的全部连接覆盖。</small></span
+              ></label
             >
-              清除池级 HTTPS 代理
-            </button>
-          </div>
-          <label class="switch-field field--span"
-            ><input v-model="settingsForm.allow_direct_fallback" type="checkbox" /><span
-              ><strong>代理失败时允许直连</strong
-              ><small>可能使流量绕过代理，默认建议关闭。</small></span
-            ></label
-          >
-        </div>
-        <div class="form-actions">
-          <button class="button button--primary" type="submit">保存池设置</button>
-        </div>
-        <div class="section-divider"></div>
-        <div class="danger-zone">
-          <div>
-            <strong>删除账号池</strong>
-            <p>同时删除池内的 Tavily Key、额度快照和所有中转凭证。</p>
-          </div>
-          <button class="button button--danger" type="button" @click="deletePool">
-            <Trash2 :size="16" />删除账号池
-          </button>
-        </div>
-      </form>
+            <div v-if="connectionOverride" class="form-grid">
+              <label class="field field--span"
+                ><span>Tavily Base URL（留空继承全局）</span
+                ><input
+                  v-model.trim="settingsForm.upstream_base_url"
+                  type="url"
+                  placeholder="https://api.tavily.com"
+              /></label>
+              <div class="field">
+                <label for="pool-http-proxy">HTTP 代理</label>
+                <input
+                  id="pool-http-proxy"
+                  v-model.trim="settingsForm.http_proxy"
+                  type="url"
+                  :placeholder="pool.http_proxy || 'http://127.0.0.1:7890'"
+                  @input="proxyTouched.http = true"
+                /><small v-if="pool.http_proxy && !proxyTouched.http"
+                  >当前：{{ pool.http_proxy }}</small
+                ><button
+                  v-if="pool.http_proxy"
+                  class="field-action"
+                  type="button"
+                  @click="clearPoolProxy('http')"
+                >
+                  清除池级 HTTP 代理
+                </button>
+              </div>
+              <div class="field">
+                <label for="pool-https-proxy">HTTPS 代理</label>
+                <input
+                  id="pool-https-proxy"
+                  v-model.trim="settingsForm.https_proxy"
+                  type="url"
+                  :placeholder="pool.https_proxy || 'http://127.0.0.1:7890'"
+                  @input="proxyTouched.https = true"
+                /><small v-if="pool.https_proxy && !proxyTouched.https"
+                  >当前：{{ pool.https_proxy }}</small
+                ><button
+                  v-if="pool.https_proxy"
+                  class="field-action"
+                  type="button"
+                  @click="clearPoolProxy('https')"
+                >
+                  清除池级 HTTPS 代理
+                </button>
+              </div>
+              <label class="switch-field field--span"
+                ><input v-model="settingsForm.allow_direct_fallback" type="checkbox" /><span
+                  ><strong>代理失败时允许直连</strong
+                  ><small>可能使流量绕过代理，默认建议关闭。</small></span
+                ></label
+              >
+            </div>
+            <div class="form-actions">
+              <button class="button button--primary" type="submit">保存池设置</button>
+            </div>
+            <div class="section-divider"></div>
+            <div class="danger-zone">
+              <div>
+                <strong>删除账号池</strong>
+                <p>同时删除池内的 Tavily Key、额度快照和所有中转凭证。</p>
+              </div>
+              <button class="button button--danger" type="button" @click="deletePool">
+                <Trash2 :size="16" />删除账号池
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
     </template>
   </div>
 </template>

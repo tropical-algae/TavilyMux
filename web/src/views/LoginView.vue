@@ -32,12 +32,14 @@ async function submit(): Promise<void> {
 <template>
   <main class="login-page">
     <section class="login-intro" aria-labelledby="login-title">
-      <div class="login-intro__orbit" aria-hidden="true">
-        <span></span><span></span><span></span>
-        <KeyRound :size="30" :stroke-width="1.4" />
+      <div class="login-brand" aria-label="TavilyMux">
+        <div class="login-intro__orbit" aria-hidden="true">
+          <span></span><span></span><span></span>
+          <KeyRound :size="26" :stroke-width="1.4" />
+        </div>
+        <span>TavilyMux</span>
       </div>
       <div>
-        <p class="product-name">TavilyMux</p>
         <h1 id="login-title">让每一次搜索，抵达正确的 Key。</h1>
         <p>统一管理账号池、额度和故障切换。搜索请求走内存路由，管理操作留在控制面。</p>
       </div>

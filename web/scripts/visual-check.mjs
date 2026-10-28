@@ -57,6 +57,93 @@ const pools = [
   },
 ]
 
+const keys = [
+  {
+    id: "key-primary",
+    name: "生产主 Key",
+    masked_key: "tvly-••••••••••4f2a",
+    enabled: true,
+    status: "available",
+    usage: 2180,
+    usage_limit: null,
+    key_remaining: null,
+    account_plan_remaining: 7820,
+    paygo_remaining: 0,
+    account_remaining: 7820,
+    estimated_remaining: 7820,
+    quota_bottleneck: "account",
+    account_plan: "Pro",
+    account_plan_usage: 2180,
+    account_plan_limit: 10000,
+    paygo_usage: 0,
+    paygo_limit: 0,
+    cooldown_until: null,
+    last_checked_at: "2026-10-28T12:05:00Z",
+    last_used_at: "2026-10-28T12:05:00Z",
+    request_count: 846,
+    success_count: 835,
+    failure_count: 11,
+    last_error: null,
+    created_at: "2026-10-27T08:00:00Z",
+  },
+  {
+    id: "key-backup",
+    name: "生产备用",
+    masked_key: "tvly-••••••••••91bc",
+    enabled: true,
+    status: "low_quota",
+    usage: 9400,
+    usage_limit: 10000,
+    key_remaining: 600,
+    account_plan_remaining: 7820,
+    paygo_remaining: 0,
+    account_remaining: 7820,
+    estimated_remaining: 600,
+    quota_bottleneck: "key",
+    account_plan: "Pro",
+    account_plan_usage: 2180,
+    account_plan_limit: 10000,
+    paygo_usage: 0,
+    paygo_limit: 0,
+    cooldown_until: null,
+    last_checked_at: "2026-10-28T12:04:00Z",
+    last_used_at: "2026-10-28T11:58:00Z",
+    request_count: 302,
+    success_count: 293,
+    failure_count: 9,
+    last_error: null,
+    created_at: "2026-10-27T09:00:00Z",
+  },
+]
+
+const relayKeys = [
+  {
+    id: "relay-production",
+    name: "生产环境",
+    prefix: "tpool_prod_••••9x2k",
+    enabled: true,
+    created_at: "2026-10-27T08:00:00Z",
+    last_used_at: "2026-10-28T12:05:00Z",
+  },
+]
+
+const usage = Array.from({ length: 12 }, (_, index) => ({
+  captured_at: `2026-10-28T${String(index + 1).padStart(2, "0")}:00:00Z`,
+  usage: 1850 + index * 30,
+  usage_limit: null,
+  account_plan_usage: 1850 + index * 30,
+  account_plan_limit: 10000,
+  paygo_usage: 0,
+  paygo_limit: 0,
+  key_remaining: null,
+  account_plan_remaining: 8150 - index * 30,
+  paygo_remaining: 0,
+  account_remaining: 8150 - index * 30,
+  estimated_remaining: 8150 - index * 30,
+  quota_bottleneck: "account",
+  status: "available",
+}))
+
 const logs = {
   total: 3,
   page: 1,
@@ -130,6 +217,26 @@ async function installRoutes(page, authenticated) {
           ],
         })
       }
+      if (url.pathname === "/api/v1/settings") {
+        return json(route, {
+          upstream_base_url: "https://api.tavily.com",
+          http_proxy: "http://host.docker.internal:7890",
+          https_proxy: "http://host.docker.internal:7890",
+          allow_direct_fallback: false,
+          monitor_interval_seconds: 300,
+          request_timeout_seconds: 60,
+          max_attempts: 3,
+          log_retention_days: 30,
+        })
+      }
+      if (url.pathname === "/api/v1/pools/pool-primary/keys/key-primary/usage") {
+        return json(route, usage)
+      }
+      if (url.pathname === "/api/v1/pools/pool-primary/keys") return json(route, keys)
+      if (url.pathname === "/api/v1/pools/pool-primary/relay-keys") {
+        return json(route, relayKeys)
+      }
+      if (url.pathname === "/api/v1/pools/pool-primary") return json(route, pools[0])
       if (url.pathname === "/api/v1/pools") return json(route, pools)
       if (url.pathname === "/api/v1/logs") return json(route, logs)
       return json(route, {})
@@ -150,10 +257,59 @@ async function installRoutes(page, authenticated) {
   })
 }
 
-async function capture(browser, name, viewport, path, authenticated) {
-  const page = await browser.newPage({ viewportSize: viewport, deviceScaleFactor: 1 })
+async function capture(browser, name, viewport, path, authenticated, interact = null) {
+  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
   await installRoutes(page, authenticated)
   await page.goto(`http://app.local${path}`, { waitUntil: "networkidle" })
+  if (interact) {
+    await interact(page)
+    await page.waitForTimeout(320)
+  }
+  await page.evaluate(() => document.fonts.ready)
+  const audit = await page.evaluate(() => {
+    const isVisible = (element) => {
+      const style = window.getComputedStyle(element)
+      const bounds = element.getBoundingClientRect()
+      return style.visibility !== "hidden" && style.display !== "none" && bounds.width > 0
+    }
+    const hasName = (element) => {
+      const labelledBy = element.getAttribute("aria-labelledby")
+      const labelledByText = labelledBy
+        ?.split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent ?? "")
+        .join(" ")
+      const explicitLabel = element.id
+        ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`)?.textContent
+        : ""
+      return Boolean(
+        element.getAttribute("aria-label")?.trim() ||
+        labelledByText?.trim() ||
+        explicitLabel?.trim() ||
+        element.closest("label")?.textContent?.trim() ||
+        element.getAttribute("title")?.trim() ||
+        element.textContent?.trim(),
+      )
+    }
+    const unnamed = Array.from(
+      document.querySelectorAll(
+        'button, a[href], input:not([type="hidden"]), select, textarea',
+      ),
+    )
+      .filter(isVisible)
+      .filter((element) => !hasName(element))
+      .map((element) => element.outerHTML.slice(0, 160))
+
+    return {
+      horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+      unnamed,
+    }
+  })
+  if (audit.horizontalOverflow > 1) {
+    throw new Error(`${name}: body overflows viewport by ${audit.horizontalOverflow}px`)
+  }
+  if (audit.unnamed.length > 0) {
+    throw new Error(`${name}: unnamed controls: ${audit.unnamed.join(" | ")}`)
+  }
   await page.screenshot({ path: join(output, `${name}.png`), fullPage: true })
   await page.close()
 }
@@ -161,13 +317,52 @@ async function capture(browser, name, viewport, path, authenticated) {
 const browser = await chromium.launch({
   headless: true,
   chromiumSandbox: false,
-  args: ["--no-zygote", "--single-process", "--disable-gpu"],
+  args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
 })
 try {
   await capture(browser, "login-desktop", { width: 1440, height: 900 }, "/login", false)
   await capture(browser, "login-mobile", { width: 390, height: 844 }, "/login", false)
   await capture(browser, "dashboard-desktop", { width: 1440, height: 1000 }, "/", true)
   await capture(browser, "dashboard-mobile", { width: 390, height: 844 }, "/", true)
+  await capture(browser, "pools-desktop", { width: 1440, height: 1000 }, "/pools", true)
+  await capture(browser, "pools-mobile", { width: 390, height: 844 }, "/pools", true)
+  await capture(
+    browser,
+    "pool-detail-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+  )
+  await capture(
+    browser,
+    "pool-detail-mobile",
+    { width: 390, height: 844 },
+    "/pools/pool-primary",
+    true,
+  )
+  await capture(browser, "logs-desktop", { width: 1440, height: 1000 }, "/logs", true)
+  await capture(browser, "logs-mobile", { width: 390, height: 844 }, "/logs", true)
+  await capture(browser, "settings-desktop", { width: 1440, height: 1000 }, "/settings", true)
+  await capture(browser, "settings-mobile", { width: 390, height: 844 }, "/settings", true)
+  await capture(browser, "command-desktop", { width: 1440, height: 1000 }, "/", true, (page) =>
+    page.keyboard.press("/"),
+  )
+  await capture(
+    browser,
+    "pool-create-mobile",
+    { width: 390, height: 844 },
+    "/pools",
+    true,
+    (page) => page.getByRole("button", { name: /创建账号池/ }).click(),
+  )
+  await capture(
+    browser,
+    "logs-filter-mobile",
+    { width: 390, height: 844 },
+    "/logs",
+    true,
+    (page) => page.getByRole("button", { name: "筛选", exact: true }).click(),
+  )
 } finally {
   await browser.close()
 }

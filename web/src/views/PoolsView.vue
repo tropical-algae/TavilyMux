@@ -143,100 +143,129 @@ onMounted(load)
       <pre><code>{{ searchExample }}</code></pre>
     </section>
 
-    <form v-if="createOpen" class="panel form-panel" @submit.prevent="createPool">
-      <div class="section-heading">
-        <div>
-          <h2>新账号池</h2>
-          <p>连接配置默认继承全局设置，可在池详情中覆盖。</p>
-        </div>
+    <Transition name="overlay">
+      <div v-if="createOpen" class="sheet-overlay" @mousedown.self="createOpen = false">
+        <form class="side-sheet form-panel" @submit.prevent="createPool">
+          <div class="side-sheet__header">
+            <div>
+              <h2>创建账号池</h2>
+              <p>先建立路由边界，Tavily Key 可以在创建后继续添加。</p>
+            </div>
+            <button
+              class="icon-button"
+              type="button"
+              aria-label="关闭创建面板"
+              @click="createOpen = false"
+            >
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="side-sheet__body">
+            <div class="form-grid">
+              <label class="field"
+                ><span>池名称</span
+                ><input
+                  v-model.trim="form.name"
+                  required
+                  maxlength="100"
+                  placeholder="例如：生产搜索"
+              /></label>
+              <label class="field"
+                ><span>路由策略</span
+                ><select v-model="form.strategy">
+                  <option value="max_remaining">剩余额度优先</option>
+                  <option value="random">随机可用 Key</option>
+                </select></label
+              >
+              <label class="field field--span"
+                ><span>描述（可选）</span
+                ><textarea
+                  v-model.trim="form.description"
+                  rows="2"
+                  placeholder="说明这个池服务的调用环境"
+                />
+              </label>
+              <label class="field"
+                ><span>额度检测间隔（秒）</span
+                ><input
+                  v-model.number="form.monitor_interval_seconds"
+                  type="number"
+                  min="60"
+                  max="86400"
+              /></label>
+              <label class="field"
+                ><span>最大尝试次数</span
+                ><input v-model.number="form.max_attempts" type="number" min="1" max="10"
+              /></label>
+              <label class="field"
+                ><span>并发上限（可选）</span
+                ><input
+                  v-model.number="form.concurrency_limit"
+                  type="number"
+                  min="1"
+                  placeholder="不限制"
+              /></label>
+              <label class="field"
+                ><span>每分钟请求上限（可选）</span
+                ><input
+                  v-model.number="form.rpm_limit"
+                  type="number"
+                  min="1"
+                  placeholder="不限制"
+              /></label>
+            </div>
+            <label class="switch-field"
+              ><input v-model="form.connection_override" type="checkbox" /><span
+                ><strong>创建时覆盖全局连接</strong
+                ><small>可以为这个池指定独立 Tavily 地址或 Clash HTTP 代理。</small></span
+              ></label
+            >
+            <div v-if="form.connection_override" class="form-grid">
+              <label class="field field--span"
+                ><span>Tavily Base URL（留空继承全局）</span
+                ><input
+                  v-model.trim="form.upstream_base_url"
+                  type="url"
+                  placeholder="https://api.tavily.com"
+              /></label>
+              <label class="field"
+                ><span>HTTP 代理</span
+                ><input
+                  v-model.trim="form.http_proxy"
+                  type="url"
+                  placeholder="http://127.0.0.1:7890"
+              /></label>
+              <label class="field"
+                ><span>HTTPS 代理</span
+                ><input
+                  v-model.trim="form.https_proxy"
+                  type="url"
+                  placeholder="http://127.0.0.1:7890"
+              /></label>
+              <label class="switch-field field--span"
+                ><input v-model="form.allow_direct_fallback" type="checkbox" /><span
+                  ><strong>代理失败时允许直连</strong
+                  ><small>可能绕过代理，默认关闭。</small></span
+                ></label
+              >
+            </div>
+            <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+          </div>
+          <div class="side-sheet__footer">
+            <button class="button button--ghost" type="button" @click="createOpen = false">
+              取消
+            </button>
+            <button
+              class="button button--primary"
+              type="submit"
+              :disabled="saving || !form.name"
+            >
+              {{ saving ? "正在创建…" : "创建并生成中转 Key" }}
+            </button>
+          </div>
+        </form>
       </div>
-      <div class="form-grid">
-        <label class="field"
-          ><span>池名称</span
-          ><input
-            v-model.trim="form.name"
-            required
-            maxlength="100"
-            placeholder="例如：生产搜索"
-        /></label>
-        <label class="field"
-          ><span>路由策略</span
-          ><select v-model="form.strategy">
-            <option value="max_remaining">剩余额度优先</option>
-            <option value="random">随机可用 Key</option>
-          </select></label
-        >
-        <label class="field field--span"
-          ><span>描述（可选）</span
-          ><textarea
-            v-model.trim="form.description"
-            rows="2"
-            placeholder="说明这个池服务的调用环境"
-          />
-        </label>
-        <label class="field"
-          ><span>额度检测间隔（秒）</span
-          ><input
-            v-model.number="form.monitor_interval_seconds"
-            type="number"
-            min="60"
-            max="86400"
-        /></label>
-        <label class="field"
-          ><span>最大尝试次数</span
-          ><input v-model.number="form.max_attempts" type="number" min="1" max="10"
-        /></label>
-        <label class="field"
-          ><span>并发上限（可选）</span
-          ><input
-            v-model.number="form.concurrency_limit"
-            type="number"
-            min="1"
-            placeholder="不限制"
-        /></label>
-        <label class="field"
-          ><span>每分钟请求上限（可选）</span
-          ><input v-model.number="form.rpm_limit" type="number" min="1" placeholder="不限制"
-        /></label>
-      </div>
-      <label class="switch-field"
-        ><input v-model="form.connection_override" type="checkbox" /><span
-          ><strong>创建时覆盖全局连接</strong
-          ><small>可以为这个池指定独立 Tavily 地址或 Clash HTTP 代理。</small></span
-        ></label
-      >
-      <div v-if="form.connection_override" class="form-grid">
-        <label class="field field--span"
-          ><span>Tavily Base URL（留空继承全局）</span
-          ><input
-            v-model.trim="form.upstream_base_url"
-            type="url"
-            placeholder="https://api.tavily.com"
-        /></label>
-        <label class="field"
-          ><span>HTTP 代理</span
-          ><input v-model.trim="form.http_proxy" type="url" placeholder="http://127.0.0.1:7890"
-        /></label>
-        <label class="field"
-          ><span>HTTPS 代理</span
-          ><input
-            v-model.trim="form.https_proxy"
-            type="url"
-            placeholder="http://127.0.0.1:7890"
-        /></label>
-        <label class="switch-field field--span"
-          ><input v-model="form.allow_direct_fallback" type="checkbox" /><span
-            ><strong>代理失败时允许直连</strong><small>可能绕过代理，默认关闭。</small></span
-          ></label
-        >
-      </div>
-      <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-      <div class="form-actions">
-        <button class="button button--primary" type="submit" :disabled="saving || !form.name">
-          {{ saving ? "正在创建…" : "创建并生成中转 Key" }}
-        </button>
-      </div>
-    </form>
+    </Transition>
 
     <LoadingSkeleton v-if="loading" :rows="6" />
     <div v-else-if="error && !createOpen" class="inline-error">

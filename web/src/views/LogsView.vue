@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, RefreshCw } from "lucide-vue-next"
-import { onMounted, ref } from "vue"
+import { ChevronDown, ChevronRight, RefreshCw, SlidersHorizontal, X } from "lucide-vue-next"
+import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 
 import { api, errorMessage } from "../api/client"
@@ -16,6 +16,7 @@ const keys = ref<TavilyKey[]>([])
 const loading = ref(true)
 const error = ref("")
 const expanded = ref(new Set<string>())
+const filtersOpen = ref(false)
 const route = useRoute()
 const filters = ref({
   pool_id: typeof route.query.pool_id === "string" ? route.query.pool_id : "",
@@ -29,6 +30,20 @@ const filters = ref({
   page: 1,
   page_size: 50,
 })
+
+const activeFilterCount = computed(
+  () =>
+    [
+      filters.value.pool_id,
+      filters.value.key_id,
+      filters.value.status_code,
+      filters.value.success,
+      filters.value.retried,
+      filters.value.request_id,
+      filters.value.time_from,
+      filters.value.time_to,
+    ].filter(Boolean).length,
+)
 
 async function loadKeys(selectedKeyId = ""): Promise<void> {
   filters.value.key_id = ""
@@ -88,6 +103,24 @@ function toggle(log: ProxyLog): void {
 
 function applyFilters(): void {
   filters.value.page = 1
+  filtersOpen.value = false
+  void load()
+}
+
+function clearFilters(): void {
+  Object.assign(filters.value, {
+    pool_id: "",
+    key_id: "",
+    status_code: "",
+    success: "",
+    retried: "",
+    request_id: "",
+    time_from: "",
+    time_to: "",
+    page: 1,
+  })
+  keys.value = []
+  filtersOpen.value = false
   void load()
 }
 
@@ -113,19 +146,45 @@ onMounted(async () => {
       title="请求日志"
       description="每条外部调用关联其内部 Key 尝试，不保存搜索正文。"
     >
-      <template #actions
-        ><button
+      <template #actions>
+        <button
+          class="button button--quiet filter-toggle"
+          type="button"
+          @click="filtersOpen = true"
+        >
+          <SlidersHorizontal :size="16" />筛选
+          <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
+        </button>
+        <button
           class="button button--secondary"
           type="button"
           :disabled="loading"
           @click="load"
         >
           <RefreshCw :size="16" :class="{ spin: loading }" />刷新
-        </button></template
-      >
+        </button>
+      </template>
     </PageHeader>
 
-    <form class="filter-bar" @submit.prevent="applyFilters">
+    <form
+      class="filter-bar"
+      :class="{ 'filter-bar--open': filtersOpen }"
+      @submit.prevent="applyFilters"
+    >
+      <div class="filter-bar__mobile-header">
+        <div>
+          <h2>筛选请求</h2>
+          <p>组合条件快速定位一次调用链。</p>
+        </div>
+        <button
+          class="icon-button"
+          type="button"
+          aria-label="关闭筛选"
+          @click="filtersOpen = false"
+        >
+          <X :size="18" />
+        </button>
+      </div>
       <label
         ><span>账号池</span
         ><select v-model="filters.pool_id" @change="loadKeys()">
@@ -170,7 +229,17 @@ onMounted(async () => {
       <label
         ><span>结束时间</span><input v-model="filters.time_to" type="datetime-local"
       /></label>
-      <button class="button button--secondary" type="submit">应用筛选</button>
+      <div class="filter-actions">
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="!activeFilterCount"
+          @click="clearFilters"
+        >
+          重置
+        </button>
+        <button class="button button--primary" type="submit">应用筛选</button>
+      </div>
     </form>
 
     <LoadingSkeleton v-if="loading" :rows="7" />
