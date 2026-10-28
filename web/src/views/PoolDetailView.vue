@@ -3,11 +3,7 @@ import {
   Activity,
   ArrowLeft,
   BookOpenText,
-  CheckCircle2,
-  Copy,
   KeyRound,
-  Plus,
-  RefreshCw,
   Settings,
   ShieldCheck,
   Trash2,
@@ -21,7 +17,8 @@ import ConfirmModal from "../components/ConfirmModal.vue"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
-import QuotaMeter from "../components/QuotaMeter.vue"
+import PoolAccessPanel from "../components/PoolAccessPanel.vue"
+import PoolKeysPanel from "../components/PoolKeysPanel.vue"
 import RequestLogList from "../components/RequestLogList.vue"
 import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
@@ -38,7 +35,7 @@ import type {
   TavilyKey,
   UsageSnapshot,
 } from "../types/api"
-import { formatDate, formatLatency, formatNumber, successRate } from "../utils/format"
+import { formatDate, formatLatency, formatNumber } from "../utils/format"
 
 type Tab = "overview" | "keys" | "logs" | "access" | "settings"
 
@@ -569,114 +566,17 @@ onMounted(load)
         </section>
       </template>
 
-      <template v-else-if="activeTab === 'keys'">
-        <div class="section-actions">
-          <div>
-            <h2>Tavily Keys</h2>
-            <p>真实 Key 只加密保存，页面始终脱敏显示。</p>
-          </div>
-          <UiButton variant="primary" @click="keyFormOpen = true">
-            <Plus :size="17" />添加 Key
-          </UiButton>
-        </div>
-        <EmptyState
-          v-if="keys.length === 0"
-          title="池里还没有 Tavily Key"
-          description="添加至少一个 Key 后，这个池才能接收搜索请求。"
-        />
-        <section v-else class="table-surface key-table-surface">
-          <div class="table-wrap">
-            <table class="key-table">
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th>API Key</th>
-                  <th>状态</th>
-                  <th>额度</th>
-                  <th>成功率</th>
-                  <th>最后检测</th>
-                  <th class="align-right">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="key in keys" :key="key.id">
-                  <td>
-                    <strong class="key-name">{{ key.name }}</strong>
-                  </td>
-                  <td>
-                    <code class="key-token" :title="key.masked_key">{{ key.masked_key }}</code>
-                  </td>
-                  <td>
-                    <div class="cell-stack">
-                      <StatusBadge :status="key.status" />
-                      <small v-if="key.last_error">{{ key.last_error }}</small>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="quota-cell">
-                      <strong class="quota-remaining">
-                        剩余：{{ formatNumber(key.estimated_remaining) }}
-                        <span>（{{ key.account_plan || "未知套餐" }}）</span>
-                      </strong>
-                      <QuotaMeter
-                        label="令牌额度"
-                        :usage="key.usage"
-                        :limit="key.usage_limit"
-                      />
-                      <QuotaMeter
-                        label="账户额度"
-                        :usage="key.account_plan_usage"
-                        :limit="key.account_plan_limit"
-                      />
-                    </div>
-                  </td>
-                  <td>
-                    <div class="cell-stack">
-                      <strong>{{ successRate(key.success_count, key.request_count) }}</strong>
-                      <small>{{ key.request_count }} 次请求</small>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="cell-stack">
-                      <strong>{{ formatDate(key.last_checked_at) }}</strong>
-                      <small>最后使用：{{ formatDate(key.last_used_at) }}</small>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="row-actions key-table__actions">
-                      <button
-                        class="icon-button"
-                        type="button"
-                        :disabled="busyKey === key.id"
-                        :aria-label="`检测 ${key.name}`"
-                        @click="checkKey(key)"
-                      >
-                        <RefreshCw :size="16" :class="{ spin: busyKey === key.id }" /></button
-                      ><RouterLink
-                        class="icon-button"
-                        :to="`/logs?pool_id=${poolId}&key_id=${key.id}`"
-                        :aria-label="`查看 ${key.name} 的日志`"
-                      >
-                        <BookOpenText :size="16" /> </RouterLink
-                      ><UiButton size="small" @click="openRenameKey(key)"> 改名</UiButton
-                      ><UiButton size="small" @click="toggleKey(key)">
-                        {{ key.enabled ? "停用" : "启用" }}</UiButton
-                      ><button
-                        class="icon-button icon-button--danger"
-                        type="button"
-                        :aria-label="`删除 ${key.name}`"
-                        @click="requestDeleteKey(key)"
-                      >
-                        <Trash2 :size="16" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
+      <PoolKeysPanel
+        v-else-if="activeTab === 'keys'"
+        :pool-id="poolId"
+        :keys="keys"
+        :busy-key="busyKey"
+        @add="keyFormOpen = true"
+        @check="checkKey"
+        @rename="openRenameKey"
+        @toggle="toggleKey"
+        @delete="requestDeleteKey"
+      />
 
       <template v-else-if="activeTab === 'logs'">
         <div class="section-actions">
@@ -701,58 +601,16 @@ onMounted(load)
         />
       </template>
 
-      <template v-else-if="activeTab === 'access'">
-        <div class="section-actions">
-          <div>
-            <h2>中转凭证</h2>
-            <p>调用方通过 Bearer 中转 Key 访问本服务的 /search。</p>
-          </div>
-          <UiButton variant="primary" @click="relayFormOpen = true">
-            <Plus :size="17" />生成凭证
-          </UiButton>
-        </div>
-        <section v-if="oneTimeRelay" class="one-time-secret">
-          <div>
-            <h2>新 Key 只显示这一次</h2>
-            <p>复制后安全地交给调用方。</p>
-          </div>
-          <code>{{ oneTimeRelay.relay_key }}</code>
-          <div class="one-time-secret__actions">
-            <UiButton variant="primary" @click="copyRelay"> <Copy :size="16" />复制 </UiButton>
-            <UiButton variant="ghost" @click="oneTimeRelay = null">
-              <CheckCircle2 :size="16" />我已保存
-            </UiButton>
-          </div>
-        </section>
-        <div class="credential-list">
-          <article v-for="relay in relayKeys" :key="relay.id" class="credential-record">
-            <div class="credential-record__identity">
-              <span class="credential-record__icon"><KeyRound :size="18" /></span>
-              <div>
-                <strong>{{ relay.name }}</strong>
-                <code>{{ relay.prefix }}_••••••••</code>
-              </div>
-            </div>
-            <div class="credential-record__last-used">
-              <span>最近使用</span>
-              <strong>{{ formatDate(relay.last_used_at) }}</strong>
-            </div>
-            <StatusBadge :status="relay.enabled ? 'available' : 'disabled'" />
-            <div class="row-actions">
-              <UiButton size="small" @click="toggleRelay(relay)">
-                {{ relay.enabled ? "停用" : "启用" }}</UiButton
-              ><button
-                class="icon-button icon-button--danger"
-                type="button"
-                aria-label="吊销凭证"
-                @click="requestDeleteRelay(relay)"
-              >
-                <Trash2 :size="16" />
-              </button>
-            </div>
-          </article>
-        </div>
-      </template>
+      <PoolAccessPanel
+        v-else-if="activeTab === 'access'"
+        :relay-keys="relayKeys"
+        :one-time-relay="oneTimeRelay"
+        @create="relayFormOpen = true"
+        @copy="copyRelay"
+        @dismiss-secret="oneTimeRelay = null"
+        @toggle="toggleRelay"
+        @delete="requestDeleteRelay"
+      />
 
       <form v-else class="panel settings-form" @submit.prevent="saveSettings">
         <div class="section-heading">
