@@ -5,6 +5,7 @@ import { onMounted, reactive, ref } from "vue"
 import { api, errorMessage } from "../api/client"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
 import { useAuthStore } from "../stores/auth"
 import { useToastStore } from "../stores/toasts"
 import type { ConnectionTest, SystemSettings } from "../types/api"
@@ -12,6 +13,7 @@ import { formatLatency } from "../utils/format"
 
 const settings = ref<SystemSettings | null>(null)
 const loading = ref(true)
+const showSkeleton = useDelayedSkeleton(loading)
 const saving = ref(false)
 const testing = ref(false)
 const connectionResult = ref<ConnectionTest | null>(null)
@@ -127,7 +129,7 @@ onMounted(load)
       title="连接设置"
       description="配置服务访问 Tavily 时使用的地址、Clash HTTP 代理和运行参数。"
     />
-    <LoadingSkeleton v-if="loading" :rows="7" />
+    <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error && !settings" class="inline-error">
       <p>{{ error }}</p>
       <button class="button button--secondary" @click="load">重新加载</button>

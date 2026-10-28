@@ -8,6 +8,7 @@ import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
 import StatusBadge from "../components/StatusBadge.vue"
+import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
 import { useToastStore } from "../stores/toasts"
 import type { CreatedPool, Dashboard, Pool, RoutingStrategy } from "../types/api"
 import { formatDate, formatLatency, formatNumber } from "../utils/format"
@@ -15,6 +16,7 @@ import { formatDate, formatLatency, formatNumber } from "../utils/format"
 const dashboard = ref<Dashboard | null>(null)
 const pools = ref<Pool[]>([])
 const loading = ref(true)
+const showSkeleton = useDelayedSkeleton(loading)
 const saving = ref(false)
 const createOpen = ref(false)
 const loadError = ref("")
@@ -137,7 +139,7 @@ onMounted(load)
       </template>
     </PageHeader>
 
-    <LoadingSkeleton v-if="loading" :rows="7" />
+    <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="loadError" class="inline-error" role="alert">
       <div>
         <strong>无法加载账号池</strong>

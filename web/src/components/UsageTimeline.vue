@@ -3,23 +3,76 @@ import { computed } from "vue"
 
 import type { UsageSnapshot } from "../types/api"
 import { formatDate, formatNumber } from "../utils/format"
+import {
+  buildTimelineScale,
+  sampleTimelineIndexes,
+  scaleTimelineValue,
+} from "../utils/timeline"
 
 const props = defineProps<{ snapshots: UsageSnapshot[] }>()
 
+const chartWidth = 1000
+const chartHeight = 240
+const chartTop = 12
+const chartBottom = 228
+
+const plottedSnapshots = computed(() =>
+  props.snapshots
+    .map((snapshot, index) => ({ snapshot, index }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        snapshot: UsageSnapshot & { estimated_remaining: number }
+        index: number
+      } => entry.snapshot.estimated_remaining !== null,
+    ),
+)
+
+const scale = computed(() =>
+  buildTimelineScale(
+    plottedSnapshots.value.map(({ snapshot }) => snapshot.estimated_remaining),
+  ),
+)
+
+function xPosition(index: number): number {
+  return props.snapshots.length === 1
+    ? chartWidth / 2
+    : (index / (props.snapshots.length - 1)) * chartWidth
+}
+
 const points = computed(() => {
-  const values = props.snapshots
-    .map((item) => item.estimated_remaining)
-    .filter((value): value is number => value !== null)
-  if (values.length === 0) return ""
-  const maximum = Math.max(...values, 1)
-  return values
-    .map((value, index) => {
-      const x = values.length === 1 ? 50 : (index / (values.length - 1)) * 100
-      const y = 88 - (value / maximum) * 72
+  if (!scale.value) return ""
+  return plottedSnapshots.value
+    .map(({ snapshot, index }) => {
+      const x = xPosition(index)
+      const y = scaleTimelineValue(
+        snapshot.estimated_remaining,
+        scale.value!,
+        chartTop,
+        chartBottom,
+      )
       return `${x},${y}`
     })
     .join(" ")
 })
+
+const yTicks = computed(() =>
+  (scale.value?.ticks ?? []).map((value) => ({
+    value,
+    position: scale.value
+      ? scaleTimelineValue(value, scale.value, chartTop, chartBottom)
+      : chartBottom,
+  })),
+)
+
+const xTicks = computed(() =>
+  sampleTimelineIndexes(props.snapshots.length).map((index) => ({
+    index,
+    position: xPosition(index),
+    label: formatTimelineDate(props.snapshots[index]?.captured_at ?? null),
+  })),
+)
 
 const last = computed(() => props.snapshots.at(-1) ?? null)
 
@@ -43,6 +96,18 @@ const showPaygo = computed(
     last.value !== null &&
     (last.value.paygo_limit !== null || (last.value.paygo_usage ?? 0) > 0),
 )
+
+const timelineDateFormatter = new Intl.DateTimeFormat("zh-CN", {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+})
+
+function formatTimelineDate(value: string | null): string {
+  return value ? timelineDateFormatter.format(new Date(value)).replace(" ", "\u00a0") : "—"
+}
 </script>
 
 <template>
@@ -71,21 +136,64 @@ const showPaygo = computed(
         <span>最后检测</span><strong>{{ formatDate(last?.captured_at ?? null) }}</strong>
       </div>
     </div>
-    <svg
+    <div
       v-if="points"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
+      class="usage-chart"
       role="img"
-      aria-label="实际可用额度时间线"
+      :aria-label="`实际可用额度从 ${formatNumber(scale?.maximum ?? null)} 到 ${formatNumber(scale?.minimum ?? null)} 的时间线`"
     >
-      <line v-for="y in [16, 40, 64, 88]" :key="y" x1="0" :y1="y" x2="100" :y2="y" />
-      <polyline :points="points" />
-      <circle
-        :cx="points.split(' ').at(-1)?.split(',')[0]"
-        :cy="points.split(' ').at(-1)?.split(',')[1]"
-        r="1.7"
-      />
-    </svg>
+      <div class="usage-chart__y-axis" aria-hidden="true">
+        <span
+          v-for="tick in yTicks"
+          :key="tick.value"
+          :style="{ top: `${(tick.position / chartHeight) * 100}%` }"
+        >
+          {{ formatNumber(tick.value) }}
+        </span>
+      </div>
+      <div class="usage-chart__plot">
+        <svg
+          :viewBox="`0 0 ${chartWidth} ${chartHeight}`"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <line
+            v-for="tick in yTicks"
+            :key="`y-${tick.value}`"
+            x1="0"
+            :y1="tick.position"
+            :x2="chartWidth"
+            :y2="tick.position"
+          />
+          <line
+            v-for="tick in xTicks"
+            :key="`x-${tick.index}`"
+            :x1="tick.position"
+            :y1="chartTop"
+            :x2="tick.position"
+            :y2="chartBottom"
+          />
+          <polyline :points="points" />
+        </svg>
+      </div>
+      <div aria-hidden="true"></div>
+      <div class="usage-chart__x-axis" aria-hidden="true">
+        <time
+          v-for="(tick, index) in xTicks"
+          :key="tick.index"
+          :class="{
+            'usage-chart__x-label--first': index === 0,
+            'usage-chart__x-label--last': index === xTicks.length - 1,
+          }"
+          :style="{ left: `${(tick.position / chartWidth) * 100}%` }"
+          :datetime="snapshots[tick.index]?.captured_at"
+        >
+          {{ tick.label }}
+        </time>
+      </div>
+      <span class="usage-chart__axis-title usage-chart__axis-title--y">剩余额度</span>
+      <span class="usage-chart__axis-title usage-chart__axis-title--x">检测时间</span>
+    </div>
     <p v-else class="usage-timeline__unknown">当前快照不足以计算实际可用额度。</p>
   </div>
   <div v-else class="chart-empty">

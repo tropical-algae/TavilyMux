@@ -23,6 +23,7 @@ import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
 import StatusBadge from "../components/StatusBadge.vue"
 import UsageTimeline from "../components/UsageTimeline.vue"
+import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
 import { useToastStore } from "../stores/toasts"
 import type {
   CreatedRelayKey,
@@ -49,6 +50,7 @@ const selectedKeyId = ref("")
 const activeTab = ref<Tab>("overview")
 const expandedLogs = ref(new Set<string>())
 const loading = ref(true)
+const showSkeleton = useDelayedSkeleton(loading)
 const busyKey = ref("")
 const error = ref("")
 const keyFormOpen = ref(false)
@@ -375,7 +377,7 @@ onMounted(load)
 
 <template>
   <div class="view-stack pool-detail-view">
-    <LoadingSkeleton v-if="loading" :rows="7" />
+    <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
       <button class="button button--secondary" @click="load">重新加载</button>

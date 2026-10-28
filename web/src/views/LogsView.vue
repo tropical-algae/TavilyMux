@@ -7,6 +7,7 @@ import { api, errorMessage } from "../api/client"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import { useDelayedSkeleton } from "../composables/useDelayedSkeleton"
 import type { PaginatedLogs, Pool, ProxyLog, TavilyKey } from "../types/api"
 import { formatDate, formatLatency } from "../utils/format"
 
@@ -14,6 +15,7 @@ const logs = ref<PaginatedLogs | null>(null)
 const pools = ref<Pool[]>([])
 const keys = ref<TavilyKey[]>([])
 const loading = ref(true)
+const showSkeleton = useDelayedSkeleton(loading)
 const error = ref("")
 const expanded = ref(new Set<string>())
 const filtersOpen = ref(false)
@@ -242,7 +244,7 @@ onMounted(async () => {
       </div>
     </form>
 
-    <LoadingSkeleton v-if="loading" :rows="7" />
+    <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
       <button class="button button--secondary" @click="load">重新加载</button>
