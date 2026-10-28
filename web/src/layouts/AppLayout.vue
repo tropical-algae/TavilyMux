@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  Activity,
   BookOpenText,
   ChevronRight,
   Command,
@@ -26,13 +25,12 @@ const commandPalette = ref<HTMLElement | null>(null)
 const commandPreviousFocus = ref<HTMLElement | null>(null)
 
 const navigation = [
-  { to: "/", label: "运行总览", shortLabel: "总览", icon: Activity, hint: "服务健康与容量" },
   {
-    to: "/pools",
+    to: "/",
     label: "账号池",
     shortLabel: "账号池",
     icon: Network,
-    hint: "Key 与路由策略",
+    hint: "运行指标、Key 与路由策略",
   },
   {
     to: "/logs",
@@ -168,14 +166,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
         <span class="brand__name">TavilyMux</span>
       </RouterLink>
 
-      <div class="system-signal">
-        <span class="system-signal__pulse" aria-hidden="true"></span>
-        <div>
-          <strong>路由服务在线</strong>
-          <span>Runtime 已就绪</span>
-        </div>
-      </div>
-
       <nav class="primary-nav">
         <RouterLink
           v-for="item in navigation"
@@ -185,10 +175,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
           :exact-active-class="item.to === '/' ? 'router-link-exact-active' : undefined"
         >
           <component :is="item.icon" :size="18" :stroke-width="1.8" />
-          <span>
-            <strong>{{ item.label }}</strong>
-            <small>{{ item.hint }}</small>
-          </span>
+          <strong>{{ item.label }}</strong>
           <ChevronRight :size="15" class="nav-chevron" aria-hidden="true" />
         </RouterLink>
       </nav>

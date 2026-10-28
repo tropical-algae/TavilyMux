@@ -72,7 +72,7 @@ const keys = [
     account_remaining: 7820,
     estimated_remaining: 7820,
     quota_bottleneck: "account",
-    account_plan: "Pro",
+    account_plan: "Researcher",
     account_plan_usage: 2180,
     account_plan_limit: 10000,
     paygo_usage: 0,
@@ -100,7 +100,7 @@ const keys = [
     account_remaining: 7820,
     estimated_remaining: 600,
     quota_bottleneck: "key",
-    account_plan: "Pro",
+    account_plan: "Researcher",
     account_plan_usage: 2180,
     account_plan_limit: 10000,
     paygo_usage: 0,
@@ -324,8 +324,6 @@ try {
   await capture(browser, "login-mobile", { width: 390, height: 844 }, "/login", false)
   await capture(browser, "dashboard-desktop", { width: 1440, height: 1000 }, "/", true)
   await capture(browser, "dashboard-mobile", { width: 390, height: 844 }, "/", true)
-  await capture(browser, "pools-desktop", { width: 1440, height: 1000 }, "/pools", true)
-  await capture(browser, "pools-mobile", { width: 390, height: 844 }, "/pools", true)
   await capture(
     browser,
     "pool-detail-desktop",
@@ -340,6 +338,22 @@ try {
     "/pools/pool-primary",
     true,
   )
+  await capture(
+    browser,
+    "pool-keys-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    (page) => page.getByRole("tab", { name: "Tavily Keys" }).click(),
+  )
+  await capture(
+    browser,
+    "pool-keys-mobile",
+    { width: 390, height: 844 },
+    "/pools/pool-primary",
+    true,
+    (page) => page.getByRole("tab", { name: "Tavily Keys" }).click(),
+  )
   await capture(browser, "logs-desktop", { width: 1440, height: 1000 }, "/logs", true)
   await capture(browser, "logs-mobile", { width: 390, height: 844 }, "/logs", true)
   await capture(browser, "settings-desktop", { width: 1440, height: 1000 }, "/settings", true)
@@ -347,13 +361,8 @@ try {
   await capture(browser, "command-desktop", { width: 1440, height: 1000 }, "/", true, (page) =>
     page.keyboard.press("/"),
   )
-  await capture(
-    browser,
-    "pool-create-mobile",
-    { width: 390, height: 844 },
-    "/pools",
-    true,
-    (page) => page.getByRole("button", { name: /创建账号池/ }).click(),
+  await capture(browser, "pool-create-mobile", { width: 390, height: 844 }, "/", true, (page) =>
+    page.getByRole("button", { name: /创建账号池/ }).click(),
   )
   await capture(
     browser,

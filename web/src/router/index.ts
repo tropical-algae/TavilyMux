@@ -13,7 +13,6 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: "", name: "dashboard", component: () => import("../views/DashboardView.vue") },
-        { path: "pools", name: "pools", component: () => import("../views/PoolsView.vue") },
         {
           path: "pools/:id",
           name: "pool-detail",

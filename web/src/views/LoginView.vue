@@ -33,10 +33,7 @@ async function submit(): Promise<void> {
   <main class="login-page">
     <section class="login-intro" aria-labelledby="login-title">
       <div class="login-brand" aria-label="TavilyMux">
-        <div class="login-intro__orbit" aria-hidden="true">
-          <span></span><span></span><span></span>
-          <KeyRound :size="26" :stroke-width="1.4" />
-        </div>
+        <span class="brand__mark" aria-hidden="true"><KeyRound :size="18" /></span>
         <span>TavilyMux</span>
       </div>
       <div>
