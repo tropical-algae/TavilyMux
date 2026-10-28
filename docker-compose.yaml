@@ -1,0 +1,38 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    environment:
+      TAVILY_MUX_CONFIG_FILE: /data/config.yaml
+      TAVILY_MUX_ADMIN_SECRET: ${TAVILY_MUX_ADMIN_SECRET:-}
+      TAVILY_MUX_MASTER_KEY: ${TAVILY_MUX_MASTER_KEY:-}
+      TAVILY_MUX_COOKIE_SECURE: ${TAVILY_MUX_COOKIE_SECURE:-false}
+      TAVILY_MUX_LOG_FORMAT: ${TAVILY_MUX_LOG_FORMAT:-json}
+    volumes:
+      - tavily-mux-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  nginx:
+    image: nginx:1.29-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${TAVILY_MUX_PORT:-8080}:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+volumes:
+  tavily-mux-data:
