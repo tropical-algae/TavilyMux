@@ -1,0 +1,56 @@
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks.git
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: debug-statements
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.2
+    hooks:
+      - id: ruff-check
+        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-format
+
+  - repo: https://github.com/codespell-project/codespell.git
+    rev: v2.4.2
+    hooks:
+      - id: codespell
+        files: "\\.(py|md|toml|yaml|yml)$"
+
+  - repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        additional_dependencies: [mdformat-gfm]
+
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
+
+  - repo: local
+    hooks:
+      - id: frontend-eslint
+        name: frontend eslint
+        entry: npm --prefix web run lint -- --fix
+        language: system
+        pass_filenames: false
+        files: ^web/.*\.(ts|vue|js|mjs)$
+      - id: frontend-prettier
+        name: frontend prettier
+        entry: npm --prefix web run format
+        language: system
+        pass_filenames: false
+        files: ^web/

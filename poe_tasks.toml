@@ -1,0 +1,55 @@
+executor.type = "uv"
+
+[tasks.install]
+cmd = "uv sync --frozen"
+
+[tasks.run]
+cmd = "python -m tavily_mux.main"
+
+[tasks.lint]
+cmd = "ruff check src tests"
+
+[tasks.format]
+cmd = "ruff format src tests"
+
+[tasks.format-check]
+cmd = "ruff format --check src tests"
+
+[tasks.type-check]
+cmd = "mypy src tests"
+
+[tasks.test]
+cmd = "pytest"
+
+[tasks.test-all]
+sequence = ["lint", "format-check", "type-check", "test", "web-check"]
+
+[tasks.build]
+cmd = "uv build"
+
+[tasks.web-install]
+cmd = "npm ci"
+cwd = "web"
+
+[tasks.web-check]
+sequence = ["web-lint", "web-format-check", "web-type-check", "web-test", "web-build"]
+
+[tasks.web-lint]
+cmd = "npm run lint"
+cwd = "web"
+
+[tasks.web-format-check]
+cmd = "npm run format-check"
+cwd = "web"
+
+[tasks.web-type-check]
+cmd = "npm run type-check"
+cwd = "web"
+
+[tasks.web-test]
+cmd = "npm run test"
+cwd = "web"
+
+[tasks.web-build]
+cmd = "npm run build"
+cwd = "web"
