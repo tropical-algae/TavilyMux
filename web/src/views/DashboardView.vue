@@ -10,6 +10,7 @@ import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
 import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
+import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useToastStore } from "../stores/toasts"
 import type { CreatedPool, Dashboard, Pool, RoutingStrategy } from "../types/api"
@@ -127,19 +128,18 @@ onMounted(load)
   <div class="view-stack pools-workspace">
     <PageHeader title="账号池" description="查看运行状态并管理路由池、Tavily Key 与中转凭证。">
       <template #actions>
-        <button
-          class="button button--quiet button--icon-mobile"
-          type="button"
+        <UiButton
+          class="button--icon-mobile"
           :disabled="loading"
           aria-label="刷新账号池"
           @click="load"
         >
           <RefreshCw :size="16" :class="{ spin: loading }" />
           <span>刷新</span>
-        </button>
-        <button class="button button--primary" type="button" @click="createOpen = true">
+        </UiButton>
+        <UiButton variant="primary" @click="createOpen = true">
           <Plus :size="17" />创建账号池
-        </button>
+        </UiButton>
       </template>
     </PageHeader>
 
@@ -149,7 +149,7 @@ onMounted(load)
         <strong>无法加载账号池</strong>
         <p>{{ loadError }}</p>
       </div>
-      <button class="button button--secondary" type="button" @click="load">重新加载</button>
+      <UiButton @click="load">重新加载</UiButton>
     </div>
 
     <template v-else-if="dashboard">
@@ -202,12 +202,8 @@ onMounted(load)
         </div>
         <code>{{ created.relay_key }}</code>
         <div class="one-time-secret__actions">
-          <button class="button button--primary" type="button" @click="copyKey">
-            <Copy :size="16" />复制 Key
-          </button>
-          <button class="button button--ghost" type="button" @click="created = null">
-            我已保存
-          </button>
+          <UiButton variant="primary" @click="copyKey"> <Copy :size="16" />复制 Key </UiButton>
+          <UiButton variant="ghost" @click="created = null"> 我已保存 </UiButton>
         </div>
       </section>
       <section v-if="created" class="relay-example" aria-label="Search 调用示例">
@@ -228,9 +224,7 @@ onMounted(load)
         title="还没有账号池"
         description="创建账号池并添加 Tavily Key 后即可开始转发搜索请求。"
       >
-        <button class="button button--primary" type="button" @click="createOpen = true">
-          创建账号池
-        </button>
+        <UiButton variant="primary" @click="createOpen = true"> 创建账号池 </UiButton>
       </EmptyState>
       <section v-else class="pool-directory">
         <RouterLink
@@ -371,22 +365,17 @@ onMounted(load)
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
       </form>
       <template #footer>
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="saving"
-          @click="createOpen = false"
-        >
+        <UiButton variant="ghost" :disabled="saving" @click="createOpen = false">
           取消
-        </button>
-        <button
-          class="button button--primary"
+        </UiButton>
+        <UiButton
+          variant="primary"
           type="submit"
           form="create-pool-form"
           :disabled="saving || !form.name"
         >
           {{ saving ? "正在创建…" : "创建并生成中转 Key" }}
-        </button>
+        </UiButton>
       </template>
     </BaseModal>
   </div>

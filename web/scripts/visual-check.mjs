@@ -323,6 +323,7 @@ try {
   await capture(browser, "login-desktop", { width: 1440, height: 900 }, "/login", false)
   await capture(browser, "login-mobile", { width: 390, height: 844 }, "/login", false)
   await capture(browser, "dashboard-desktop", { width: 1440, height: 1000 }, "/", true)
+  await capture(browser, "dashboard-tablet", { width: 1024, height: 900 }, "/", true)
   await capture(browser, "dashboard-mobile", { width: 390, height: 844 }, "/", true)
   await capture(
     browser,
@@ -363,6 +364,28 @@ try {
     async (page) => {
       await page.getByRole("tab", { name: "Tavily Keys" }).click()
       await page.getByRole("button", { name: "添加 Key" }).click()
+    },
+  )
+  await capture(
+    browser,
+    "pool-rename-key-modal-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "Tavily Keys" }).click()
+      await page.getByRole("button", { name: "改名" }).first().click()
+    },
+  )
+  await capture(
+    browser,
+    "pool-delete-key-modal-mobile",
+    { width: 390, height: 844 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "Tavily Keys" }).click()
+      await page.getByRole("button", { name: "删除 生产主 Key" }).click()
     },
   )
   await capture(
@@ -422,6 +445,7 @@ try {
   )
   await capture(browser, "logs-mobile", { width: 390, height: 844 }, "/logs", true)
   await capture(browser, "settings-desktop", { width: 1440, height: 1000 }, "/settings", true)
+  await capture(browser, "settings-tablet", { width: 768, height: 1024 }, "/settings", true)
   await capture(browser, "settings-mobile", { width: 390, height: 844 }, "/settings", true)
   await capture(browser, "command-desktop", { width: 1440, height: 1000 }, "/", true, (page) =>
     page.keyboard.press("/"),

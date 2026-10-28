@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, RefreshCw, SlidersHorizontal, X } from "lucide-vue-next"
+import { RefreshCw, SlidersHorizontal, X } from "lucide-vue-next"
 import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 
@@ -8,10 +8,11 @@ import DateTimeControl from "../components/DateTimeControl.vue"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import RequestLogList from "../components/RequestLogList.vue"
 import SelectControl from "../components/SelectControl.vue"
+import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
-import type { PaginatedLogs, Pool, ProxyLog, TavilyKey } from "../types/api"
-import { formatDate, formatLatency } from "../utils/format"
+import type { PaginatedLogs, Pool, TavilyKey } from "../types/api"
 
 const logs = ref<PaginatedLogs | null>(null)
 const pools = ref<Pool[]>([])
@@ -121,10 +122,10 @@ async function load(): Promise<void> {
   await runDataLoad(fetchLogs)
 }
 
-function toggle(log: ProxyLog): void {
+function toggle(logId: string): void {
   const next = new Set(expanded.value)
-  if (next.has(log.id)) next.delete(log.id)
-  else next.add(log.id)
+  if (next.has(logId)) next.delete(logId)
+  else next.add(logId)
   expanded.value = next
 }
 
@@ -178,29 +179,20 @@ onMounted(() =>
       description="每条外部调用关联其内部 Key 尝试，不保存搜索正文。"
     >
       <template #actions>
-        <button
-          class="button button--quiet filter-toggle"
-          type="button"
-          @click="filtersOpen = true"
-        >
+        <UiButton class="filter-toggle" @click="filtersOpen = true">
           <SlidersHorizontal :size="16" />筛选
           <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
-        </button>
-        <button
-          class="button button--secondary"
-          type="button"
-          :disabled="loading"
-          @click="load"
-        >
+        </UiButton>
+        <UiButton :disabled="loading" @click="load">
           <RefreshCw :size="16" :class="{ spin: loading }" />刷新
-        </button>
+        </UiButton>
       </template>
     </PageHeader>
 
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
-      <button class="button button--secondary" @click="load">重新加载</button>
+      <UiButton @click="load">重新加载</UiButton>
     </div>
     <template v-else-if="initialized">
       <form
@@ -267,15 +259,10 @@ onMounted(() =>
           <DateTimeControl v-model="filters.time_to" aria-label="结束时间" />
         </div>
         <div class="filter-actions">
-          <button
-            class="button button--ghost"
-            type="button"
-            :disabled="!activeFilterCount"
-            @click="clearFilters"
-          >
+          <UiButton variant="ghost" :disabled="!activeFilterCount" @click="clearFilters">
             重置
-          </button>
-          <button class="button button--primary" type="submit">应用筛选</button>
+          </UiButton>
+          <UiButton variant="primary" type="submit">应用筛选</UiButton>
         </div>
       </form>
 
@@ -284,77 +271,25 @@ onMounted(() =>
         title="没有符合条件的请求"
         description="调整筛选条件，或先通过任意中转 Key 调用 /search。"
       />
-      <section v-else class="log-stream">
-        <article v-for="log in logs.items" :key="log.id" class="log-entry">
-          <button
-            class="log-entry__summary"
-            type="button"
-            :aria-expanded="expanded.has(log.id)"
-            @click="toggle(log)"
-          >
-            <ChevronDown v-if="expanded.has(log.id)" :size="17" /><ChevronRight
-              v-else
-              :size="17"
-            />
-            <time>{{ formatDate(log.created_at) }}</time>
-            <code>{{ log.id }}</code>
-            <span
-              class="http-status"
-              :class="{ 'http-status--error': !log.status_code || log.status_code >= 400 }"
-              >{{ log.status_code ?? "ERR" }}</span
-            >
-            <span>{{ log.attempt_count }} 次尝试</span>
-            <strong>{{ formatLatency(log.latency_ms) }}</strong>
-          </button>
-          <div v-if="expanded.has(log.id)" class="attempt-trace">
-            <div class="attempt-trace__meta">
-              <span
-                >最终 Key：<code>{{ log.final_key_id || "未选择" }}</code></span
-              ><span
-                >外部请求 ID：<code>{{ log.external_request_id || "未提供" }}</code></span
+      <RequestLogList v-else :logs="logs.items" :expanded="expanded" @toggle="toggle">
+        <template #footer>
+          <footer class="pagination">
+            <span>共 {{ logs.total }} 条</span>
+            <div>
+              <UiButton size="small" :disabled="logs.page <= 1" @click="previousPage">
+                上一页</UiButton
+              ><span>第 {{ logs.page }} 页</span
+              ><UiButton
+                size="small"
+                :disabled="logs.page * logs.page_size >= logs.total"
+                @click="nextPage"
               >
+                下一页
+              </UiButton>
             </div>
-            <ol>
-              <li v-for="attempt in log.attempts" :key="attempt.attempt_no">
-                <span
-                  class="attempt-trace__node"
-                  :class="{
-                    'attempt-trace__node--error':
-                      !attempt.status_code || attempt.status_code >= 400,
-                  }"
-                ></span>
-                <div>
-                  <strong
-                    >第 {{ attempt.attempt_no }} 次 ·
-                    {{ attempt.status_code ?? "网络错误" }}</strong
-                  ><code>{{ attempt.key_id || "Key 已删除" }}</code>
-                </div>
-                <span>{{ attempt.error_type || "完成" }}</span>
-                <time>{{ formatLatency(attempt.latency_ms) }}</time>
-              </li>
-            </ol>
-          </div>
-        </article>
-        <footer class="pagination">
-          <span>共 {{ logs.total }} 条</span>
-          <div>
-            <button
-              class="button button--tiny"
-              :disabled="logs.page <= 1"
-              @click="previousPage"
-            >
-              上一页</button
-            ><span>第 {{ logs.page }} 页</span
-            ><button
-              class="button button--tiny"
-              :disabled="logs.page * logs.page_size >= logs.total"
-              @click="nextPage"
-            >
-              下一页
-            </button>
-          </div>
-        </footer>
-      </section>
+          </footer>
+        </template>
+      </RequestLogList>
     </template>
   </div>
 </template>

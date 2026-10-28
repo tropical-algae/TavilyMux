@@ -1,0 +1,110 @@
+:root {
+  color-scheme: light;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC",
+    "Noto Sans SC", "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  /* Surfaces */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-subtle: #f7f7f5;
+  --surface-raised: #fafbfa;
+  --surface-muted: #efefed;
+  --surface-skeleton: #eef0ed;
+  --surface-hover: rgba(55, 53, 47, 0.06);
+  --surface-selected: rgba(55, 53, 47, 0.08);
+  --surface-pressed: rgba(55, 53, 47, 0.1);
+  --sidebar: var(--surface-subtle);
+
+  /* Text and borders */
+  --text: #37352f;
+  --text-soft: rgba(55, 53, 47, 0.76);
+  --text-muted: rgba(55, 53, 47, 0.58);
+  --text-faint: rgba(55, 53, 47, 0.34);
+  --text-placeholder: #6f7871;
+  --text-on-solid: #ffffff;
+  --border: rgba(55, 53, 47, 0.09);
+  --border-strong: rgba(55, 53, 47, 0.16);
+  --control-border-hover: rgba(22, 27, 31, 0.27);
+
+  /* Actions and semantic states */
+  --action-primary: #18221e;
+  --action-primary-hover: #0c1713;
+  --accent: #0f7b6c;
+  --accent-hover: #0b675b;
+  --accent-soft: #e7f3f1;
+  --accent-ink: #0b5d52;
+  --warning: #9a6700;
+  --warning-soft: #fbf3db;
+  --warning-border: rgba(154, 103, 0, 0.12);
+  --danger: #c83c3c;
+  --danger-hover: #9b3434;
+  --danger-ink: #8d2f2f;
+  --danger-soft: #fdebec;
+  --danger-soft-hover: #f9dfe2;
+  --danger-border: rgba(210, 68, 68, 0.15);
+  --danger-border-subtle: rgba(210, 68, 68, 0.12);
+  --info: #426b9c;
+  --disabled-indicator: #afb4af;
+
+  /* Data visualization */
+  --meter-track: var(--surface-muted);
+  --meter-positive: #9ed8cf;
+  --meter-warning: #e9c46a;
+  --meter-danger: #ef9a9a;
+  --chart-grid: #e7e9e6;
+
+  /* Overlays and feedback */
+  --overlay: rgba(20, 24, 28, 0.34);
+  --overlay-soft: rgba(20, 24, 28, 0.3);
+  --topbar: rgba(255, 255, 255, 0.94);
+  --topbar-control: rgba(255, 255, 255, 0.82);
+  --mobile-nav: rgba(255, 255, 255, 0.98);
+  --skeleton-highlight: rgba(255, 255, 255, 0.58);
+  --toast: #17201c;
+  --toast-error: #5f2525;
+  --toast-text: #edf3ef;
+
+  /* Type scale */
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.75rem;
+  --font-size-body: 0.8125rem;
+  --font-size-body-lg: 0.875rem;
+  --font-size-heading-sm: 1rem;
+  --font-size-heading-md: 1.0625rem;
+  --font-size-metric: 1.3rem;
+  --font-weight-regular: 500;
+  --font-weight-medium: 560;
+  --font-weight-semibold: 620;
+  --font-weight-bold: 680;
+
+  /* Geometry */
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --radius-overlay: 12px;
+  --radius-meter: 3px;
+  --radius-pill: 999px;
+  --control-height-small: 32px;
+  --control-height-icon: 36px;
+  --control-height: 40px;
+  --field-height: 42px;
+  --radius: var(--radius-surface);
+  --radius-small: var(--radius-control);
+
+  /* Depth and layout */
+  --shadow-float: 0 12px 32px rgba(55, 53, 47, 0.14), 0 2px 8px rgba(55, 53, 47, 0.08);
+  --shadow-control: 0 1px 2px rgba(55, 53, 47, 0.08);
+  --shadow-sheet: 0 -12px 32px rgba(55, 53, 47, 0.14);
+  --control-inset: inset 0 1px 1px rgba(22, 27, 31, 0.025);
+  --nav-width: 232px;
+  --topbar-height: 52px;
+
+  /* Motion */
+  --duration-fast: 130ms;
+  --duration-normal: 180ms;
+  --duration-reveal: 240ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}

@@ -4,6 +4,7 @@ import { ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { errorMessage } from "../api/client"
+import UiButton from "../components/UiButton.vue"
 import { useAuthStore } from "../stores/auth"
 
 const auth = useAuthStore()
@@ -74,14 +75,10 @@ async function submit(): Promise<void> {
           <span>在这台设备上保持登录</span>
         </label>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-        <button
-          class="button button--primary button--wide"
-          type="submit"
-          :disabled="loading || !secret"
-        >
+        <UiButton variant="primary" block type="submit" :disabled="loading || !secret">
           <span>{{ loading ? "正在验证…" : "进入控制台" }}</span>
           <ArrowRight v-if="!loading" :size="18" />
-        </button>
+        </UiButton>
       </form>
 
       <p class="login-panel__note">管理密钥仅用于本服务控制台，不会发送给 Tavily。</p>

@@ -4,6 +4,7 @@ import { computed, ref } from "vue"
 
 import BaseModal from "./BaseModal.vue"
 import SelectControl from "./SelectControl.vue"
+import UiButton from "./UiButton.vue"
 
 interface CalendarCell {
   key: string
@@ -206,9 +207,9 @@ function clear(): void {
         </div>
       </div>
       <template #footer>
-        <button class="button button--ghost" type="button" @click="clear">清除</button>
-        <button class="button button--quiet" type="button" @click="selectToday">今天</button>
-        <button class="button button--primary" type="button" @click="confirm">确定</button>
+        <UiButton variant="ghost" @click="clear">清除</UiButton>
+        <UiButton @click="selectToday">今天</UiButton>
+        <UiButton variant="primary" @click="confirm">确定</UiButton>
       </template>
     </BaseModal>
   </div>

@@ -4,15 +4,12 @@ import {
   ArrowLeft,
   BookOpenText,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   Copy,
   KeyRound,
   Plus,
   RefreshCw,
   Settings,
   ShieldCheck,
-  TriangleAlert,
   Trash2,
 } from "lucide-vue-next"
 import { computed, onMounted, reactive, ref, watch } from "vue"
@@ -20,11 +17,15 @@ import { RouterLink, useRoute, useRouter } from "vue-router"
 
 import { api, errorMessage } from "../api/client"
 import BaseModal from "../components/BaseModal.vue"
+import ConfirmModal from "../components/ConfirmModal.vue"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import QuotaMeter from "../components/QuotaMeter.vue"
+import RequestLogList from "../components/RequestLogList.vue"
 import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
+import UiButton from "../components/UiButton.vue"
 import UsageTimeline from "../components/UsageTimeline.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useToastStore } from "../stores/toasts"
@@ -64,6 +65,13 @@ const deletePoolOpen = ref(false)
 const addingKeys = ref(false)
 const creatingRelay = ref(false)
 const deletingPool = ref(false)
+const renamingKey = ref<TavilyKey | null>(null)
+const renameKeyName = ref("")
+const savingKeyName = ref(false)
+const destructiveTarget = ref<
+  { kind: "key"; item: TavilyKey } | { kind: "relay"; item: RelayKey } | null
+>(null)
+const deletingTarget = ref(false)
 const keyMode = ref<"single" | "bulk">("single")
 const keyForm = reactive({ name: "", api_key: "", bulk: "" })
 const relayName = ref("")
@@ -97,6 +105,26 @@ const canAddKeys = computed(() =>
     ? Boolean(keyForm.name && keyForm.api_key)
     : Boolean(keyForm.bulk.trim()),
 )
+const destructiveCopy = computed(() => {
+  const target = destructiveTarget.value
+  if (!target) return null
+  if (target.kind === "key") {
+    return {
+      title: "删除 Tavily Key",
+      description: `确认删除“${target.item.name}”吗？`,
+      warningTitle: "此操作无法撤销",
+      warningDescription: "该 Key 将立即退出路由候选，相关历史请求记录仍会保留。",
+      confirmLabel: "确认删除 Key",
+    }
+  }
+  return {
+    title: "吊销中转凭证",
+    description: `确认吊销“${target.item.name}”吗？`,
+    warningTitle: "调用权限将立即失效",
+    warningDescription: "所有正在使用这枚凭证的调用方都将无法继续访问 /search。",
+    confirmLabel: "确认吊销凭证",
+  }
+})
 
 const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: "overview", label: "概览", icon: Activity },
@@ -130,23 +158,6 @@ function syncSettings(): void {
   )
   proxyTouched.http = false
   proxyTouched.https = false
-}
-
-function quotaLabel(usage: number | null, limit: number | null): string {
-  if (usage === null && limit === null) return "尚未同步"
-  return `${formatNumber(usage)} / ${limit === null ? "未设上限" : formatNumber(limit)}`
-}
-
-function quotaPercent(usage: number | null, limit: number | null): number {
-  if (usage === null || limit === null || limit <= 0) return 0
-  return Math.min(100, Math.max(0, (usage / limit) * 100))
-}
-
-function quotaTone(usage: number | null, limit: number | null): string {
-  const percent = quotaPercent(usage, limit)
-  if (percent >= 95) return "danger"
-  if (percent >= 80) return "warning"
-  return "normal"
 }
 
 async function load(): Promise<void> {
@@ -267,17 +278,30 @@ async function checkKey(key: TavilyKey): Promise<void> {
   }
 }
 
-async function renameKey(key: TavilyKey): Promise<void> {
-  const name = window.prompt("新的 Key 名称", key.name)?.trim()
-  if (!name || name === key.name) return
+function openRenameKey(key: TavilyKey): void {
+  renamingKey.value = key
+  renameKeyName.value = key.name
+}
+
+async function saveKeyName(): Promise<void> {
+  const key = renamingKey.value
+  const name = renameKeyName.value.trim()
+  if (!key || !name || name === key.name) {
+    renamingKey.value = null
+    return
+  }
+  savingKeyName.value = true
   try {
     const updated = await api.patch<TavilyKey>(`/pools/${poolId.value}/keys/${key.id}`, {
       name,
     })
     Object.assign(key, updated.data)
+    renamingKey.value = null
     toasts.show("Key 名称已更新", "success")
   } catch (cause) {
     toasts.show(errorMessage(cause, "Key 改名失败"), "error")
+  } finally {
+    savingKeyName.value = false
   }
 }
 
@@ -293,15 +317,8 @@ async function toggleKey(key: TavilyKey): Promise<void> {
   }
 }
 
-async function deleteKey(key: TavilyKey): Promise<void> {
-  if (!window.confirm(`确定删除 ${key.name}？此操作无法撤销。`)) return
-  try {
-    await api.delete(`/pools/${poolId.value}/keys/${key.id}`)
-    keys.value = keys.value.filter((item) => item.id !== key.id)
-    toasts.show("Key 已删除", "success")
-  } catch (cause) {
-    toasts.show(errorMessage(cause, "Key 删除失败"), "error")
-  }
+function requestDeleteKey(key: TavilyKey): void {
+  destructiveTarget.value = { kind: "key", item: key }
 }
 
 async function createRelay(): Promise<void> {
@@ -334,14 +351,32 @@ async function toggleRelay(relay: RelayKey): Promise<void> {
   }
 }
 
-async function deleteRelay(relay: RelayKey): Promise<void> {
-  if (!window.confirm(`确定吊销 ${relay.name}？使用它的调用方会立即失去访问权限。`)) return
+function requestDeleteRelay(relay: RelayKey): void {
+  destructiveTarget.value = { kind: "relay", item: relay }
+}
+
+async function confirmTargetDeletion(): Promise<void> {
+  const target = destructiveTarget.value
+  if (!target) return
+  deletingTarget.value = true
   try {
-    await api.delete(`/pools/${poolId.value}/relay-keys/${relay.id}`)
-    relayKeys.value = relayKeys.value.filter((item) => item.id !== relay.id)
-    toasts.show("中转凭证已吊销", "success")
+    if (target.kind === "key") {
+      await api.delete(`/pools/${poolId.value}/keys/${target.item.id}`)
+      keys.value = keys.value.filter((item) => item.id !== target.item.id)
+      toasts.show("Key 已删除", "success")
+    } else {
+      await api.delete(`/pools/${poolId.value}/relay-keys/${target.item.id}`)
+      relayKeys.value = relayKeys.value.filter((item) => item.id !== target.item.id)
+      toasts.show("中转凭证已吊销", "success")
+    }
+    destructiveTarget.value = null
   } catch (cause) {
-    toasts.show(errorMessage(cause, "中转凭证吊销失败"), "error")
+    toasts.show(
+      errorMessage(cause, target.kind === "key" ? "Key 删除失败" : "中转凭证吊销失败"),
+      "error",
+    )
+  } finally {
+    deletingTarget.value = false
   }
 }
 
@@ -431,7 +466,7 @@ onMounted(load)
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
-      <button class="button button--secondary" @click="load">重新加载</button>
+      <UiButton @click="load">重新加载</UiButton>
     </div>
     <template v-else-if="pool">
       <RouterLink class="back-link" to="/"><ArrowLeft :size="16" />返回账号池</RouterLink>
@@ -540,9 +575,9 @@ onMounted(load)
             <h2>Tavily Keys</h2>
             <p>真实 Key 只加密保存，页面始终脱敏显示。</p>
           </div>
-          <button class="button button--primary" type="button" @click="keyFormOpen = true">
+          <UiButton variant="primary" @click="keyFormOpen = true">
             <Plus :size="17" />添加 Key
-          </button>
+          </UiButton>
         </div>
         <EmptyState
           v-if="keys.length === 0"
@@ -583,56 +618,16 @@ onMounted(load)
                         剩余：{{ formatNumber(key.estimated_remaining) }}
                         <span>（{{ key.account_plan || "未知套餐" }}）</span>
                       </strong>
-                      <div class="quota-meter">
-                        <span>令牌额度</span>
-                        <div
-                          class="quota-progress"
-                          :class="`quota-progress--${quotaTone(key.usage, key.usage_limit)}`"
-                          role="progressbar"
-                          aria-label="令牌额度使用量"
-                          aria-valuemin="0"
-                          :aria-valuemax="key.usage_limit ?? undefined"
-                          :aria-valuenow="
-                            key.usage_limit === null ? undefined : (key.usage ?? 0)
-                          "
-                          :aria-valuetext="quotaLabel(key.usage, key.usage_limit)"
-                        >
-                          <span
-                            class="quota-progress__fill"
-                            :style="{ width: `${quotaPercent(key.usage, key.usage_limit)}%` }"
-                          ></span>
-                          <strong>{{ quotaLabel(key.usage, key.usage_limit) }}</strong>
-                        </div>
-                      </div>
-                      <div class="quota-meter">
-                        <span>账户额度</span>
-                        <div
-                          class="quota-progress"
-                          :class="`quota-progress--${quotaTone(key.account_plan_usage, key.account_plan_limit)}`"
-                          role="progressbar"
-                          aria-label="账户额度使用量"
-                          aria-valuemin="0"
-                          :aria-valuemax="key.account_plan_limit ?? undefined"
-                          :aria-valuenow="
-                            key.account_plan_limit === null
-                              ? undefined
-                              : (key.account_plan_usage ?? 0)
-                          "
-                          :aria-valuetext="
-                            quotaLabel(key.account_plan_usage, key.account_plan_limit)
-                          "
-                        >
-                          <span
-                            class="quota-progress__fill"
-                            :style="{
-                              width: `${quotaPercent(key.account_plan_usage, key.account_plan_limit)}%`,
-                            }"
-                          ></span>
-                          <strong>{{
-                            quotaLabel(key.account_plan_usage, key.account_plan_limit)
-                          }}</strong>
-                        </div>
-                      </div>
+                      <QuotaMeter
+                        label="令牌额度"
+                        :usage="key.usage"
+                        :limit="key.usage_limit"
+                      />
+                      <QuotaMeter
+                        label="账户额度"
+                        :usage="key.account_plan_usage"
+                        :limit="key.account_plan_limit"
+                      />
                     </div>
                   </td>
                   <td>
@@ -663,23 +658,14 @@ onMounted(load)
                         :aria-label="`查看 ${key.name} 的日志`"
                       >
                         <BookOpenText :size="16" /> </RouterLink
-                      ><button
-                        class="button button--tiny"
-                        type="button"
-                        @click="renameKey(key)"
-                      >
-                        改名</button
-                      ><button
-                        class="button button--tiny"
-                        type="button"
-                        @click="toggleKey(key)"
-                      >
-                        {{ key.enabled ? "停用" : "启用" }}</button
+                      ><UiButton size="small" @click="openRenameKey(key)"> 改名</UiButton
+                      ><UiButton size="small" @click="toggleKey(key)">
+                        {{ key.enabled ? "停用" : "启用" }}</UiButton
                       ><button
                         class="icon-button icon-button--danger"
                         type="button"
                         :aria-label="`删除 ${key.name}`"
-                        @click="deleteKey(key)"
+                        @click="requestDeleteKey(key)"
                       >
                         <Trash2 :size="16" />
                       </button>
@@ -707,49 +693,12 @@ onMounted(load)
           title="这个池还没有请求"
           description="使用中转 Key 调用 /search 后即可查看完整尝试链。"
         />
-        <section v-else class="log-stream">
-          <article v-for="log in logs.items" :key="log.id" class="log-entry">
-            <button
-              class="log-entry__summary"
-              type="button"
-              :aria-expanded="expandedLogs.has(log.id)"
-              @click="toggleLog(log.id)"
-            >
-              <ChevronDown v-if="expandedLogs.has(log.id)" :size="17" />
-              <ChevronRight v-else :size="17" />
-              <time>{{ formatDate(log.created_at) }}</time>
-              <code>{{ log.id }}</code>
-              <span
-                class="http-status"
-                :class="{
-                  'http-status--error': !log.status_code || log.status_code >= 400,
-                }"
-                >{{ log.status_code ?? "ERR" }}</span
-              >
-              <span>{{ log.attempt_count }} 次尝试</span>
-              <strong>{{ formatLatency(log.latency_ms) }}</strong>
-            </button>
-            <div v-if="expandedLogs.has(log.id)" class="attempt-trace">
-              <ol>
-                <li v-for="attempt in log.attempts" :key="attempt.attempt_no">
-                  <span
-                    class="attempt-trace__node"
-                    :class="{
-                      'attempt-trace__node--error':
-                        !attempt.status_code || attempt.status_code >= 400,
-                    }"
-                  ></span>
-                  <div>
-                    <strong>第 {{ attempt.attempt_no }} 次</strong>
-                    <code>{{ attempt.key_id || "Key 已删除" }}</code>
-                  </div>
-                  <span>{{ attempt.error_type || "完成" }}</span>
-                  <time>{{ formatLatency(attempt.latency_ms) }}</time>
-                </li>
-              </ol>
-            </div>
-          </article>
-        </section>
+        <RequestLogList
+          v-else
+          :logs="logs.items"
+          :expanded="expandedLogs"
+          @toggle="toggleLog"
+        />
       </template>
 
       <template v-else-if="activeTab === 'access'">
@@ -758,9 +707,9 @@ onMounted(load)
             <h2>中转凭证</h2>
             <p>调用方通过 Bearer 中转 Key 访问本服务的 /search。</p>
           </div>
-          <button class="button button--primary" type="button" @click="relayFormOpen = true">
+          <UiButton variant="primary" @click="relayFormOpen = true">
             <Plus :size="17" />生成凭证
-          </button>
+          </UiButton>
         </div>
         <section v-if="oneTimeRelay" class="one-time-secret">
           <div>
@@ -769,11 +718,10 @@ onMounted(load)
           </div>
           <code>{{ oneTimeRelay.relay_key }}</code>
           <div class="one-time-secret__actions">
-            <button class="button button--primary" type="button" @click="copyRelay">
-              <Copy :size="16" />复制</button
-            ><button class="button button--ghost" type="button" @click="oneTimeRelay = null">
+            <UiButton variant="primary" @click="copyRelay"> <Copy :size="16" />复制 </UiButton>
+            <UiButton variant="ghost" @click="oneTimeRelay = null">
               <CheckCircle2 :size="16" />我已保存
-            </button>
+            </UiButton>
           </div>
         </section>
         <div class="credential-list">
@@ -791,13 +739,13 @@ onMounted(load)
             </div>
             <StatusBadge :status="relay.enabled ? 'available' : 'disabled'" />
             <div class="row-actions">
-              <button class="button button--tiny" type="button" @click="toggleRelay(relay)">
-                {{ relay.enabled ? "停用" : "启用" }}</button
+              <UiButton size="small" @click="toggleRelay(relay)">
+                {{ relay.enabled ? "停用" : "启用" }}</UiButton
               ><button
                 class="icon-button icon-button--danger"
                 type="button"
                 aria-label="吊销凭证"
-                @click="deleteRelay(relay)"
+                @click="requestDeleteRelay(relay)"
               >
                 <Trash2 :size="16" />
               </button>
@@ -925,10 +873,10 @@ onMounted(load)
           >
         </div>
         <div class="form-actions">
-          <button class="button button--danger" type="button" @click="deletePoolOpen = true">
+          <UiButton variant="danger" @click="deletePoolOpen = true">
             <Trash2 :size="16" />删除账号池
-          </button>
-          <button class="button button--primary" type="submit">保存池设置</button>
+          </UiButton>
+          <UiButton variant="primary" type="submit">保存池设置</UiButton>
         </div>
       </form>
     </template>
@@ -985,22 +933,17 @@ onMounted(load)
         </label>
       </form>
       <template #footer>
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="addingKeys"
-          @click="keyFormOpen = false"
-        >
+        <UiButton variant="ghost" :disabled="addingKeys" @click="keyFormOpen = false">
           取消
-        </button>
-        <button
-          class="button button--primary"
+        </UiButton>
+        <UiButton
+          variant="primary"
           type="submit"
           form="add-key-form"
           :disabled="addingKeys || !canAddKeys"
         >
           {{ addingKeys ? "正在添加…" : "添加并开始检测" }}
-        </button>
+        </UiButton>
       </template>
     </BaseModal>
 
@@ -1019,58 +962,72 @@ onMounted(load)
         </label>
       </form>
       <template #footer>
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="creatingRelay"
-          @click="relayFormOpen = false"
-        >
+        <UiButton variant="ghost" :disabled="creatingRelay" @click="relayFormOpen = false">
           取消
-        </button>
-        <button
-          class="button button--primary"
+        </UiButton>
+        <UiButton
+          variant="primary"
           type="submit"
           form="create-relay-form"
           :disabled="creatingRelay || !relayName"
         >
           {{ creatingRelay ? "正在生成…" : "生成凭证" }}
-        </button>
+        </UiButton>
       </template>
     </BaseModal>
 
     <BaseModal
+      :open="Boolean(renamingKey)"
+      title="修改 Key 名称"
+      description="名称仅用于控制台识别，不会发送给 Tavily。"
+      size="small"
+      :dismissible="!savingKeyName"
+      @close="renamingKey = null"
+    >
+      <form id="rename-key-form" class="form-panel" @submit.prevent="saveKeyName">
+        <label class="field">
+          <span>Key 名称</span>
+          <input v-model.trim="renameKeyName" required autofocus maxlength="100" />
+        </label>
+      </form>
+      <template #footer>
+        <UiButton variant="ghost" :disabled="savingKeyName" @click="renamingKey = null">
+          取消
+        </UiButton>
+        <UiButton
+          variant="primary"
+          type="submit"
+          form="rename-key-form"
+          :disabled="savingKeyName || !renameKeyName.trim()"
+        >
+          {{ savingKeyName ? "正在保存…" : "保存名称" }}
+        </UiButton>
+      </template>
+    </BaseModal>
+
+    <ConfirmModal
       :open="deletePoolOpen"
       title="删除账号池"
       :description="pool ? `确认删除“${pool.name}”吗？` : undefined"
-      size="small"
-      :dismissible="!deletingPool"
+      warning-title="此操作无法撤销"
+      warning-description="池内 Tavily Key、额度快照和全部中转凭证都会一并删除。"
+      confirm-label="确认删除账号池"
+      :busy="deletingPool"
       @close="deletePoolOpen = false"
-    >
-      <div class="destructive-confirmation">
-        <span><TriangleAlert :size="20" /></span>
-        <div>
-          <strong>此操作无法撤销</strong>
-          <p>池内 Tavily Key、额度快照和全部中转凭证都会一并删除。</p>
-        </div>
-      </div>
-      <template #footer>
-        <button
-          class="button button--ghost"
-          type="button"
-          :disabled="deletingPool"
-          @click="deletePoolOpen = false"
-        >
-          取消
-        </button>
-        <button
-          class="button button--danger"
-          type="button"
-          :disabled="deletingPool"
-          @click="deletePool"
-        >
-          {{ deletingPool ? "正在删除…" : "确认删除账号池" }}
-        </button>
-      </template>
-    </BaseModal>
+      @confirm="deletePool"
+    />
+
+    <ConfirmModal
+      v-if="destructiveCopy"
+      :open="Boolean(destructiveTarget)"
+      :title="destructiveCopy.title"
+      :description="destructiveCopy.description"
+      :warning-title="destructiveCopy.warningTitle"
+      :warning-description="destructiveCopy.warningDescription"
+      :confirm-label="destructiveCopy.confirmLabel"
+      :busy="deletingTarget"
+      @close="destructiveTarget = null"
+      @confirm="confirmTargetDeletion"
+    />
   </div>
 </template>

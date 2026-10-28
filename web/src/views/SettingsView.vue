@@ -5,6 +5,7 @@ import { onMounted, reactive, ref } from "vue"
 import { api, errorMessage } from "../api/client"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
+import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useAuthStore } from "../stores/auth"
 import { useToastStore } from "../stores/toasts"
@@ -130,23 +131,18 @@ onMounted(load)
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error && !settings" class="inline-error">
       <p>{{ error }}</p>
-      <button class="button button--secondary" @click="load">重新加载</button>
+      <UiButton @click="load">重新加载</UiButton>
     </div>
     <template v-else-if="initialized">
       <form class="panel settings-form" @submit.prevent="save">
-        <div class="section-heading">
+        <div class="section-heading section-heading--stack-mobile">
           <div>
             <h2>上游连接</h2>
             <p>代理地址是 Clash 等服务暴露的 HTTP URL，不是 VPN 配置文件。</p>
           </div>
-          <button
-            class="button button--secondary"
-            type="button"
-            :disabled="testing"
-            @click="testConnection"
-          >
+          <UiButton :disabled="testing" @click="testConnection">
             <Cable :size="16" />{{ testing ? "正在测试…" : "测试已保存连接" }}
-          </button>
+          </UiButton>
         </div>
         <label class="field"
           ><span>Tavily Base URL</span
@@ -252,9 +248,9 @@ onMounted(load)
         </div>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <div class="form-actions">
-          <button class="button button--primary" type="submit" :disabled="saving">
+          <UiButton variant="primary" type="submit" :disabled="saving">
             <Save :size="17" />{{ saving ? "正在保存…" : "保存并应用" }}
-          </button>
+          </UiButton>
         </div>
       </form>
 
@@ -299,7 +295,7 @@ onMounted(load)
           /><span>{{ secretVisible ? "隐藏密钥" : "显示密钥" }}</span></label
         >
         <div class="form-actions">
-          <button class="button button--secondary" type="submit">修改管理密钥</button>
+          <UiButton type="submit">修改管理密钥</UiButton>
         </div>
       </form>
     </template>
