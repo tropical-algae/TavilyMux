@@ -214,7 +214,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
 
       <main class="main-content">
         <RouterView v-slot="{ Component, route: renderedRoute }">
-          <component :is="Component" :key="renderedRoute.path" />
+          <Transition name="page" mode="out-in">
+            <component :is="Component" :key="renderedRoute.path" />
+          </Transition>
         </RouterView>
       </main>
 

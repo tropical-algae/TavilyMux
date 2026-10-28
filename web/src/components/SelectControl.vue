@@ -143,21 +143,23 @@ onBeforeUnmount(() => window.removeEventListener("pointerdown", onPointerDown))
       </span>
       <ChevronDown :size="16" aria-hidden="true" />
     </button>
-    <div v-if="open" :id="listboxId" class="select-control__menu" role="listbox">
-      <button
-        v-for="option in options"
-        :key="option.value"
-        type="button"
-        role="option"
-        :data-value="option.value"
-        :aria-selected="option.value === modelValue"
-        :disabled="option.disabled"
-        @click="select(option)"
-        @keydown="onOptionKeydown($event, option)"
-      >
-        <span>{{ option.label }}</span>
-        <Check v-if="option.value === modelValue" :size="15" aria-hidden="true" />
-      </button>
-    </div>
+    <Transition name="select-menu">
+      <div v-if="open" :id="listboxId" class="select-control__menu" role="listbox">
+        <button
+          v-for="option in options"
+          :key="option.value"
+          type="button"
+          role="option"
+          :data-value="option.value"
+          :aria-selected="option.value === modelValue"
+          :disabled="option.disabled"
+          @click="select(option)"
+          @keydown="onOptionKeydown($event, option)"
+        >
+          <span>{{ option.label }}</span>
+          <Check v-if="option.value === modelValue" :size="15" aria-hidden="true" />
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>

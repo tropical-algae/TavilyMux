@@ -12,12 +12,14 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  TriangleAlert,
   Trash2,
 } from "lucide-vue-next"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { RouterLink, useRoute, useRouter } from "vue-router"
 
 import { api, errorMessage } from "../api/client"
+import BaseModal from "../components/BaseModal.vue"
 import EmptyState from "../components/EmptyState.vue"
 import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
@@ -58,6 +60,10 @@ const busyKey = ref("")
 const error = ref("")
 const keyFormOpen = ref(false)
 const relayFormOpen = ref(false)
+const deletePoolOpen = ref(false)
+const addingKeys = ref(false)
+const creatingRelay = ref(false)
+const deletingPool = ref(false)
 const keyMode = ref<"single" | "bulk">("single")
 const keyForm = reactive({ name: "", api_key: "", bulk: "" })
 const relayName = ref("")
@@ -86,6 +92,11 @@ const routingOptions = [
   { value: "random", label: "随机可用 Key" },
 ]
 const keyOptions = computed(() => keys.value.map((key) => ({ value: key.id, label: key.name })))
+const canAddKeys = computed(() =>
+  keyMode.value === "single"
+    ? Boolean(keyForm.name && keyForm.api_key)
+    : Boolean(keyForm.bulk.trim()),
+)
 
 const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: "overview", label: "概览", icon: Activity },
@@ -191,6 +202,7 @@ async function loadUsage(keyId: string): Promise<void> {
 }
 
 async function addKeys(): Promise<void> {
+  addingKeys.value = true
   try {
     if (keyMode.value === "single") {
       const response = await api.post<TavilyKey>(`/pools/${poolId.value}/keys`, {
@@ -225,6 +237,8 @@ async function addKeys(): Promise<void> {
     await load()
   } catch (cause) {
     toasts.show(errorMessage(cause, "Tavily Key 添加失败"), "error")
+  } finally {
+    addingKeys.value = false
   }
 }
 
@@ -291,6 +305,7 @@ async function deleteKey(key: TavilyKey): Promise<void> {
 }
 
 async function createRelay(): Promise<void> {
+  creatingRelay.value = true
   try {
     const response = await api.post<CreatedRelayKey>(`/pools/${poolId.value}/relay-keys`, {
       name: relayName.value,
@@ -301,6 +316,8 @@ async function createRelay(): Promise<void> {
     relayFormOpen.value = false
   } catch (cause) {
     toasts.show(errorMessage(cause, "中转 Key 生成失败"), "error")
+  } finally {
+    creatingRelay.value = false
   }
 }
 
@@ -373,18 +390,17 @@ async function saveSettings(): Promise<void> {
 }
 
 async function deletePool(): Promise<void> {
-  if (
-    !pool.value ||
-    !window.confirm(`确定删除账号池 ${pool.value.name}？其 Key 和凭证会一并删除。`)
-  ) {
-    return
-  }
+  if (!pool.value) return
+  deletingPool.value = true
   try {
     await api.delete(`/pools/${poolId.value}`)
+    deletePoolOpen.value = false
     toasts.show("账号池已删除", "success")
     await router.push("/")
   } catch (cause) {
     toasts.show(errorMessage(cause, "账号池删除失败"), "error")
+  } finally {
+    deletingPool.value = false
   }
 }
 
@@ -524,57 +540,10 @@ onMounted(load)
             <h2>Tavily Keys</h2>
             <p>真实 Key 只加密保存，页面始终脱敏显示。</p>
           </div>
-          <button
-            class="button button--primary"
-            type="button"
-            @click="keyFormOpen = !keyFormOpen"
-          >
+          <button class="button button--primary" type="button" @click="keyFormOpen = true">
             <Plus :size="17" />添加 Key
           </button>
         </div>
-        <form v-if="keyFormOpen" class="panel form-panel" @submit.prevent="addKeys">
-          <div class="segmented">
-            <button
-              type="button"
-              :class="{ active: keyMode === 'single' }"
-              @click="keyMode = 'single'"
-            >
-              单个添加</button
-            ><button
-              type="button"
-              :class="{ active: keyMode === 'bulk' }"
-              @click="keyMode = 'bulk'"
-            >
-              批量粘贴
-            </button>
-          </div>
-          <div v-if="keyMode === 'single'" class="form-grid">
-            <label class="field"
-              ><span>名称</span
-              ><input v-model.trim="keyForm.name" required placeholder="例如：主账号" /></label
-            ><label class="field"
-              ><span>Tavily API Key</span
-              ><input
-                v-model.trim="keyForm.api_key"
-                type="password"
-                required
-                autocomplete="off"
-                placeholder="tvly-…"
-            /></label>
-          </div>
-          <label v-else class="field"
-            ><span>每行一个 Key，可使用“名称,Key”格式</span
-            ><textarea
-              v-model="keyForm.bulk"
-              rows="7"
-              required
-              placeholder="主账号,tvly-…&#10;备用账号,tvly-…"
-            />
-          </label>
-          <div class="form-actions">
-            <button class="button button--primary" type="submit">添加并开始检测</button>
-          </div>
-        </form>
         <EmptyState
           v-if="keys.length === 0"
           title="池里还没有 Tavily Key"
@@ -789,11 +758,7 @@ onMounted(load)
             <h2>中转凭证</h2>
             <p>调用方通过 Bearer 中转 Key 访问本服务的 /search。</p>
           </div>
-          <button
-            class="button button--primary"
-            type="button"
-            @click="relayFormOpen = !relayFormOpen"
-          >
+          <button class="button button--primary" type="button" @click="relayFormOpen = true">
             <Plus :size="17" />生成凭证
           </button>
         </div>
@@ -811,14 +776,6 @@ onMounted(load)
             </button>
           </div>
         </section>
-        <form v-if="relayFormOpen" class="panel inline-form" @submit.prevent="createRelay">
-          <label class="field"
-            ><span>凭证名称</span
-            ><input v-model.trim="relayName" required placeholder="例如：生产环境" /></label
-          ><button class="button button--primary" type="submit" :disabled="!relayName">
-            生成新的中转 Key
-          </button>
-        </form>
         <div class="credential-list">
           <article v-for="relay in relayKeys" :key="relay.id" class="credential-record">
             <div class="credential-record__identity">
@@ -968,19 +925,152 @@ onMounted(load)
           >
         </div>
         <div class="form-actions">
-          <button class="button button--primary" type="submit">保存池设置</button>
-        </div>
-        <div class="section-divider"></div>
-        <div class="danger-zone">
-          <div>
-            <strong>删除账号池</strong>
-            <p>同时删除池内的 Tavily Key、额度快照和所有中转凭证。</p>
-          </div>
-          <button class="button button--danger" type="button" @click="deletePool">
+          <button class="button button--danger" type="button" @click="deletePoolOpen = true">
             <Trash2 :size="16" />删除账号池
           </button>
+          <button class="button button--primary" type="submit">保存池设置</button>
         </div>
       </form>
     </template>
+
+    <BaseModal
+      :open="keyFormOpen"
+      title="添加 Tavily Key"
+      description="添加后会立即进入后台额度检测，并参与当前池的路由。"
+      size="large"
+      :dismissible="!addingKeys"
+      @close="keyFormOpen = false"
+    >
+      <form id="add-key-form" class="form-panel" @submit.prevent="addKeys">
+        <div class="segmented">
+          <button
+            type="button"
+            :class="{ active: keyMode === 'single' }"
+            @click="keyMode = 'single'"
+          >
+            单个添加
+          </button>
+          <button
+            type="button"
+            :class="{ active: keyMode === 'bulk' }"
+            @click="keyMode = 'bulk'"
+          >
+            批量粘贴
+          </button>
+        </div>
+        <div v-if="keyMode === 'single'" class="form-grid">
+          <label class="field">
+            <span>名称</span>
+            <input v-model.trim="keyForm.name" required placeholder="例如：主账号" />
+          </label>
+          <label class="field">
+            <span>Tavily API Key</span>
+            <input
+              v-model.trim="keyForm.api_key"
+              type="password"
+              required
+              autocomplete="off"
+              placeholder="tvly-…"
+            />
+          </label>
+        </div>
+        <label v-else class="field">
+          <span>每行一个 Key，可使用“名称,Key”格式</span>
+          <textarea
+            v-model="keyForm.bulk"
+            rows="7"
+            required
+            placeholder="主账号,tvly-…&#10;备用账号,tvly-…"
+          />
+        </label>
+      </form>
+      <template #footer>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="addingKeys"
+          @click="keyFormOpen = false"
+        >
+          取消
+        </button>
+        <button
+          class="button button--primary"
+          type="submit"
+          form="add-key-form"
+          :disabled="addingKeys || !canAddKeys"
+        >
+          {{ addingKeys ? "正在添加…" : "添加并开始检测" }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      :open="relayFormOpen"
+      title="生成中转凭证"
+      description="凭证完整值只显示一次，生成后请立即安全保存。"
+      size="small"
+      :dismissible="!creatingRelay"
+      @close="relayFormOpen = false"
+    >
+      <form id="create-relay-form" class="form-panel" @submit.prevent="createRelay">
+        <label class="field">
+          <span>凭证名称</span>
+          <input v-model.trim="relayName" required autofocus placeholder="例如：生产环境" />
+        </label>
+      </form>
+      <template #footer>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="creatingRelay"
+          @click="relayFormOpen = false"
+        >
+          取消
+        </button>
+        <button
+          class="button button--primary"
+          type="submit"
+          form="create-relay-form"
+          :disabled="creatingRelay || !relayName"
+        >
+          {{ creatingRelay ? "正在生成…" : "生成凭证" }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <BaseModal
+      :open="deletePoolOpen"
+      title="删除账号池"
+      :description="pool ? `确认删除“${pool.name}”吗？` : undefined"
+      size="small"
+      :dismissible="!deletingPool"
+      @close="deletePoolOpen = false"
+    >
+      <div class="destructive-confirmation">
+        <span><TriangleAlert :size="20" /></span>
+        <div>
+          <strong>此操作无法撤销</strong>
+          <p>池内 Tavily Key、额度快照和全部中转凭证都会一并删除。</p>
+        </div>
+      </div>
+      <template #footer>
+        <button
+          class="button button--ghost"
+          type="button"
+          :disabled="deletingPool"
+          @click="deletePoolOpen = false"
+        >
+          取消
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="deletingPool"
+          @click="deletePool"
+        >
+          {{ deletingPool ? "正在删除…" : "确认删除账号池" }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

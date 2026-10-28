@@ -356,6 +356,17 @@ try {
   )
   await capture(
     browser,
+    "pool-key-modal-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "Tavily Keys" }).click()
+      await page.getByRole("button", { name: "添加 Key" }).click()
+    },
+  )
+  await capture(
+    browser,
     "pool-access-desktop",
     { width: 1440, height: 1000 },
     "/pools/pool-primary",
@@ -370,6 +381,28 @@ try {
     true,
     (page) => page.getByRole("tab", { name: "中转凭证" }).click(),
   )
+  await capture(
+    browser,
+    "pool-relay-modal-mobile",
+    { width: 390, height: 844 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "中转凭证" }).click()
+      await page.getByRole("button", { name: "生成凭证" }).click()
+    },
+  )
+  await capture(
+    browser,
+    "pool-delete-modal-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "池设置" }).click()
+      await page.getByRole("button", { name: "删除账号池" }).click()
+    },
+  )
   await capture(browser, "logs-desktop", { width: 1440, height: 1000 }, "/logs", true)
   await capture(
     browser,
@@ -378,6 +411,14 @@ try {
     "/logs",
     true,
     (page) => page.getByRole("combobox").first().click(),
+  )
+  await capture(
+    browser,
+    "logs-date-modal-desktop",
+    { width: 1440, height: 1000 },
+    "/logs",
+    true,
+    (page) => page.getByRole("button", { name: "开始时间" }).click(),
   )
   await capture(browser, "logs-mobile", { width: 390, height: 844 }, "/logs", true)
   await capture(browser, "settings-desktop", { width: 1440, height: 1000 }, "/settings", true)
@@ -395,6 +436,17 @@ try {
     "/logs",
     true,
     (page) => page.getByRole("button", { name: "筛选", exact: true }).click(),
+  )
+  await capture(
+    browser,
+    "logs-date-modal-mobile",
+    { width: 390, height: 844 },
+    "/logs",
+    true,
+    async (page) => {
+      await page.getByRole("button", { name: "筛选", exact: true }).click()
+      await page.getByRole("button", { name: "开始时间" }).click()
+    },
   )
 } finally {
   await browser.close()
