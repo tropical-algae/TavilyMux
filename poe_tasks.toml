@@ -4,7 +4,7 @@ executor.type = "uv"
 cmd = "uv sync --frozen"
 
 [tasks.run]
-cmd = "python -m tavily_mux.main"
+cmd = "tavily-mux"
 
 [tasks.lint]
 cmd = "ruff check src tests"

@@ -1,14 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-from tavily_mux.common.config import Settings
+from tavily_mux.api.router import create_router
+from tavily_mux.common.config import EndpointSettings, Settings
 from tavily_mux.domain.endpoints import (
     CreditProfile,
-    EndpointSettings,
-    endpoint_specs,
-    estimate_credits,
-    streamed_request_id,
 )
+from tavily_mux.integrations.tavily.billing import estimate_credits
+from tavily_mux.integrations.tavily.endpoint_catalog import endpoint_specs
+from tavily_mux.integrations.tavily.protocol import streamed_request_id
 
 
 def test_custom_endpoint_defaults_and_normalizes() -> None:
@@ -31,11 +31,6 @@ def test_custom_endpoint_defaults_and_normalizes() -> None:
     "custom",
     [
         [{"path": "/same", "method": "GET"}, {"path": "/same", "method": "POST"}],
-        [{"path": "/search", "method": "GET"}],
-        [{"path": "/research/an-id"}],
-        [{"path": "/usage"}],
-        [{"path": "/api/custom"}],
-        [{"path": "/pools/custom"}],
         [{"path": "/has/{parameter}"}],
         [{"path": "/has//repeated"}],
         [{"path": "/has/%2f/separator"}],
@@ -48,9 +43,38 @@ def test_custom_endpoint_rejects_conflicts_and_unsafe_paths(
         EndpointSettings(disabled={"search"}, custom=custom)
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/search",
+        "/research/an-id",
+        "/usage",
+        "/api/custom",
+        "/pools/custom",
+    ],
+)
+def test_custom_endpoint_rejects_registered_route_conflicts(path: str) -> None:
+    settings = Settings(ENDPOINTS={"CUSTOM": [{"PATH": path}]})
+
+    with pytest.raises(ValueError, match=r"conflicts|reserved"):
+        create_router(settings)
+
+
 def test_disabled_endpoint_names_are_validated() -> None:
-    with pytest.raises(ValidationError, match="unknown built-in endpoint"):
+    with pytest.raises(ValidationError, match="Input should be"):
         EndpointSettings(disabled={"future"})
+
+
+def test_endpoint_configuration_accepts_uppercase_aliases() -> None:
+    settings = EndpointSettings.model_validate(
+        {
+            "DISABLED": ["SEARCH"],
+            "CUSTOM": [{"PATH": "/future", "METHOD": "get"}],
+        }
+    )
+
+    assert settings.disabled == {"search"}
+    assert settings.custom[0].method == "GET"
 
 
 def test_credit_estimates_use_endpoint_request_shape() -> None:
@@ -71,7 +95,7 @@ def test_endpoint_registry_can_be_loaded_from_an_environment_variable(
 ) -> None:
     monkeypatch.setenv(
         "TAVILY_MUX_ENDPOINTS",
-        '{"disabled":["map"],"custom":[{"path":"/future"}]}',
+        '{"DISABLED":["map"],"CUSTOM":[{"PATH":"/future"}]}',
     )
 
     settings = Settings(_env_file=None)

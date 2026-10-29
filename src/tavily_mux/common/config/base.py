@@ -11,7 +11,7 @@ from pydantic_settings import (
 )
 
 from tavily_mux import __version__
-from tavily_mux.domain.endpoints import EndpointSettings
+from tavily_mux.common.config.endpoint import EndpointSettings
 
 CONFIG_FILE_ENV = "TAVILY_MUX_CONFIG_FILE"
 DEFAULT_CONFIG_FILE = Path(os.getenv(CONFIG_FILE_ENV, "config.yaml")).expanduser()

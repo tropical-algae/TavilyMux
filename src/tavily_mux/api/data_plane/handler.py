@@ -3,22 +3,16 @@ import uuid
 from collections.abc import AsyncIterator
 
 import httpx2
-from fastapi import APIRouter, Request, Response, status
+from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from tavily_mux.api.dependencies import get_context
 from tavily_mux.common.time import utc_now
 from tavily_mux.domain.endpoints import (
-    BUILTIN_ENDPOINTS,
     EndpointMode,
-    EndpointSettings,
     EndpointSpec,
-    endpoint_specs,
-    estimate_credits,
-    json_request_id,
-    requests_stream,
-    streamed_request_id,
 )
+from tavily_mux.integrations.tavily.billing import estimate_credits
 from tavily_mux.integrations.tavily.client_manager import is_unambiguous_transport_error
 from tavily_mux.integrations.tavily.error_classifier import (
     RETRYABLE_KEY_STATUS_CODES,
@@ -29,56 +23,21 @@ from tavily_mux.integrations.tavily.header_policy import (
     downstream_response_headers,
     upstream_request_headers,
 )
+from tavily_mux.integrations.tavily.protocol import (
+    json_request_id,
+    requests_stream,
+    streamed_request_id,
+)
 from tavily_mux.runtime.models import KeyRuntime, PoolRuntime
 from tavily_mux.services.bootstrap import ApplicationContext
 from tavily_mux.workers.events import KeyStateEvent, ProxyAttemptEvent, ProxyRequestEvent
 
 
-def create_data_plane_router(settings: EndpointSettings) -> APIRouter:
-    router = APIRouter()
-    for route_index, spec in enumerate(endpoint_specs(settings)):
-        extra = None
-        if spec.method == "POST":
-            extra = {
-                "requestBody": {
-                    "required": True,
-                    "content": {"application/json": {"schema": {"type": "object"}}},
-                }
-            }
-        router.add_api_route(
-            spec.path,
-            _handler_for(spec),
-            methods=[spec.method],
-            response_class=Response,
-            name=f"relay_{spec.id}_{spec.method.lower()}_{route_index}",
-            openapi_extra=extra,
-        )
-
-    for spec in BUILTIN_ENDPOINTS:
-        if spec.id not in settings.disabled:
-            continue
-        router.add_api_route(
-            spec.path,
-            _disabled_handler,
-            methods=[spec.method],
-            include_in_schema=False,
-            name=f"disabled_{spec.id}_{spec.method.lower()}",
-        )
-    return router
-
-
-def _handler_for(spec: EndpointSpec):
-    async def endpoint(request: Request) -> Response:
-        return await _relay(request, spec)
-
-    return endpoint
-
-
-async def _disabled_handler() -> Response:
+async def disabled_response() -> Response:
     return _local_error(status.HTTP_404_NOT_FOUND, "endpoint_disabled")
 
 
-async def _relay(request: Request, spec: EndpointSpec) -> Response:
+async def relay(request: Request, spec: EndpointSpec) -> Response:
     context = get_context(request)
     token = _bearer_token(request.headers.get("authorization"))
     if token is None:

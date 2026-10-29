@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 from cryptography.fernet import Fernet
 
-from tavily_mux.cli import reset_admin_secret
 from tavily_mux.common.config import Settings
 from tavily_mux.persistence.database import Database
 from tavily_mux.persistence.models import AdminCredential
+from tavily_mux.services.admin_service import reset_admin_secret
 
 
 def test_reset_admin_secret_creates_and_rotates_credential(tmp_path: Path) -> None:

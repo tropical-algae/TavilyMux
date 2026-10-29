@@ -15,25 +15,6 @@ def _validate_http_url(value: str | None, *, field_name: str) -> str | None:
     return normalized
 
 
-class LoginRequest(BaseModel):
-    secret: str = Field(min_length=1, max_length=500)
-    remember: bool = False
-
-
-class LoginResponse(BaseModel):
-    authenticated: bool = True
-    csrf_token: str
-
-
-class ChangeAdminSecretRequest(BaseModel):
-    current_secret: str = Field(min_length=1, max_length=500)
-    new_secret: str = Field(min_length=12, max_length=500)
-
-
-class AuthStatus(BaseModel):
-    authenticated: bool = True
-
-
 class SettingsResponse(BaseModel):
     upstream_base_url: str
     http_proxy: str | None
@@ -64,14 +45,6 @@ class SettingsUpdate(BaseModel):
     @classmethod
     def validate_proxy(cls, value: str | None) -> str | None:
         return _validate_http_url(value, field_name="proxy")
-
-
-class ConnectionTestResponse(BaseModel):
-    ok: bool
-    latency_ms: float
-    status_code: int | None
-    proxy_configured: bool
-    message: str
 
 
 class PoolCreate(BaseModel):

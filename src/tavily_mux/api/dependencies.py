@@ -1,7 +1,8 @@
 import hmac
 from collections.abc import AsyncIterator
+from typing import Annotated
 
-from fastapi import Cookie, Header, HTTPException, Request, status
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from tavily_mux.persistence.models import AdminCredential
@@ -48,3 +49,8 @@ async def require_csrf(
 ) -> None:
     if not csrf_header or not csrf_cookie or not hmac.compare_digest(csrf_header, csrf_cookie):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid CSRF token")
+
+
+SessionDep = Annotated[Session, Depends(get_session)]
+AdminDep = Annotated[AdminCredential, Depends(require_admin)]
+CsrfDep = Annotated[None, Depends(require_csrf)]
