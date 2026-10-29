@@ -6,7 +6,6 @@ import {
   KeyRound,
   Settings,
   ShieldCheck,
-  Trash2,
 } from "lucide-vue-next"
 import { computed, onMounted, reactive, ref, watch } from "vue"
 import { RouterLink, useRoute, useRouter } from "vue-router"
@@ -19,11 +18,11 @@ import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
 import PoolAccessPanel from "../components/PoolAccessPanel.vue"
 import PoolKeysPanel from "../components/PoolKeysPanel.vue"
+import PoolOverviewPanel from "../components/PoolOverviewPanel.vue"
+import PoolSettingsPanel from "../components/PoolSettingsPanel.vue"
 import RequestLogList from "../components/RequestLogList.vue"
-import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
 import UiButton from "../components/UiButton.vue"
-import UsageTimeline from "../components/UsageTimeline.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
 import { useToastStore } from "../stores/toasts"
 import type {
@@ -31,11 +30,9 @@ import type {
   PaginatedLogs,
   Pool,
   RelayKey,
-  RoutingStrategy,
   TavilyKey,
   UsageSnapshot,
 } from "../types/api"
-import { formatDate, formatLatency, formatNumber } from "../utils/format"
 
 type Tab = "overview" | "keys" | "logs" | "access" | "settings"
 
@@ -73,30 +70,9 @@ const keyMode = ref<"single" | "bulk">("single")
 const keyForm = reactive({ name: "", api_key: "", bulk: "" })
 const relayName = ref("")
 const oneTimeRelay = ref<CreatedRelayKey | null>(null)
-const connectionOverride = ref(false)
-const proxyTouched = reactive({ http: false, https: false })
-const settingsForm = reactive({
-  name: "",
-  description: "",
-  enabled: true,
-  strategy: "max_remaining" as RoutingStrategy,
-  monitor_interval_seconds: 300,
-  max_attempts: 3,
-  concurrency_limit: null as number | null,
-  rpm_limit: null as number | null,
-  upstream_base_url: "",
-  http_proxy: "",
-  https_proxy: "",
-  allow_direct_fallback: false,
-})
 const toasts = useToastStore()
 const hydratingUsage = ref(false)
 
-const routingOptions = [
-  { value: "max_remaining", label: "剩余额度优先" },
-  { value: "random", label: "随机可用 Key" },
-]
-const keyOptions = computed(() => keys.value.map((key) => ({ value: key.id, label: key.name })))
 const canAddKeys = computed(() =>
   keyMode.value === "single"
     ? Boolean(keyForm.name && keyForm.api_key)
@@ -118,7 +94,7 @@ const destructiveCopy = computed(() => {
     title: "吊销中转凭证",
     description: `确认吊销“${target.item.name}”吗？`,
     warningTitle: "调用权限将立即失效",
-    warningDescription: "所有正在使用这枚凭证的调用方都将无法继续访问 /search。",
+    warningDescription: "所有正在使用这枚凭证的调用方都将无法继续访问 Tavily 中转接口。",
     confirmLabel: "确认吊销凭证",
   }
 })
@@ -130,32 +106,6 @@ const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: "access", label: "中转凭证", icon: ShieldCheck },
   { id: "settings", label: "池设置", icon: Settings },
 ]
-
-function syncSettings(): void {
-  if (!pool.value) return
-  Object.assign(settingsForm, {
-    name: pool.value.name,
-    description: pool.value.description ?? "",
-    enabled: pool.value.enabled,
-    strategy: pool.value.strategy,
-    monitor_interval_seconds: pool.value.monitor_interval_seconds,
-    max_attempts: pool.value.max_attempts,
-    concurrency_limit: pool.value.concurrency_limit,
-    rpm_limit: pool.value.rpm_limit,
-    upstream_base_url: pool.value.upstream_base_url ?? "",
-    http_proxy: "",
-    https_proxy: "",
-    allow_direct_fallback: pool.value.allow_direct_fallback ?? false,
-  })
-  connectionOverride.value = Boolean(
-    pool.value.upstream_base_url ||
-    pool.value.http_proxy ||
-    pool.value.https_proxy ||
-    pool.value.allow_direct_fallback !== null,
-  )
-  proxyTouched.http = false
-  proxyTouched.https = false
-}
 
 async function load(): Promise<void> {
   await runLoad(async () => {
@@ -185,7 +135,6 @@ async function load(): Promise<void> {
       selectedKeyId.value = selectedKey?.id ?? ""
       snapshots.value = usage
       hydratingUsage.value = false
-      syncSettings()
       error.value = ""
     } catch (cause) {
       error.value = errorMessage(cause, "账号池详情加载失败")
@@ -388,33 +337,11 @@ async function copyRelay(): Promise<void> {
   }
 }
 
-async function saveSettings(): Promise<void> {
-  const payload: Record<string, string | number | boolean | null> = {
-    name: settingsForm.name,
-    description: settingsForm.description || null,
-    enabled: settingsForm.enabled,
-    strategy: settingsForm.strategy,
-    monitor_interval_seconds: settingsForm.monitor_interval_seconds,
-    max_attempts: settingsForm.max_attempts,
-    concurrency_limit: settingsForm.concurrency_limit,
-    rpm_limit: settingsForm.rpm_limit,
-  }
-  if (!connectionOverride.value) {
-    Object.assign(payload, {
-      upstream_base_url: null,
-      http_proxy: null,
-      https_proxy: null,
-      allow_direct_fallback: null,
-    })
-  } else {
-    payload.upstream_base_url = settingsForm.upstream_base_url || null
-    payload.allow_direct_fallback = settingsForm.allow_direct_fallback
-    if (proxyTouched.http) payload.http_proxy = settingsForm.http_proxy || null
-    if (proxyTouched.https) payload.https_proxy = settingsForm.https_proxy || null
-  }
+async function saveSettings(
+  payload: Record<string, string | number | boolean | null>,
+): Promise<void> {
   try {
     pool.value = (await api.patch<Pool>(`/pools/${poolId.value}`, payload)).data
-    syncSettings()
     toasts.show("池设置已保存并应用到新请求", "success")
   } catch (cause) {
     toasts.show(errorMessage(cause, "池设置保存失败"), "error")
@@ -434,11 +361,6 @@ async function deletePool(): Promise<void> {
   } finally {
     deletingPool.value = false
   }
-}
-
-function clearPoolProxy(kind: "http" | "https"): void {
-  settingsForm[`${kind}_proxy`] = ""
-  proxyTouched[kind] = true
 }
 
 function toggleLog(logId: string): void {
@@ -485,86 +407,15 @@ onMounted(load)
         </button>
       </nav>
 
-      <template v-if="activeTab === 'overview'">
-        <section class="telemetry-rail telemetry-rail--compact">
-          <div>
-            <span>可用 Key</span
-            ><strong>{{ pool.available_key_count }} / {{ pool.key_count }}</strong>
-          </div>
-          <div>
-            <span>最高单 Key 可用额度</span
-            ><strong>{{ formatNumber(pool.estimated_remaining) }}</strong>
-          </div>
-          <div>
-            <span>路由策略</span
-            ><strong>{{ pool.strategy === "random" ? "随机可用" : "剩余额度优先" }}</strong>
-          </div>
-          <div>
-            <span>最大尝试</span><strong>{{ pool.max_attempts }} 次</strong>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>额度时间线</h2>
-              <p>同时核对 Key 独立限额与账户额度，实际可用值用于路由排序。</p>
-            </div>
-            <SelectControl
-              v-if="keys.length"
-              v-model="selectedKeyId"
-              :options="keyOptions"
-              aria-label="选择 Tavily Key"
-            />
-          </div>
-          <LoadingSkeleton v-if="showUsageSkeleton" class="skeleton--embedded" :rows="3" />
-          <UsageTimeline v-else :snapshots="snapshots" />
-        </section>
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>最近请求</h2>
-              <p>自动切换会以多次内部尝试呈现。</p>
-            </div>
-          </div>
-          <EmptyState
-            v-if="!logs?.items.length"
-            title="这个池还没有请求"
-            description="使用中转 Key 调用 /search 后即可观察路由结果。"
-          />
-          <div v-else class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>状态</th>
-                  <th>尝试</th>
-                  <th>耗时</th>
-                  <th>请求 ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="log in logs.items" :key="log.id">
-                  <td>{{ formatDate(log.created_at) }}</td>
-                  <td>
-                    <span
-                      class="http-status"
-                      :class="{
-                        'http-status--error': !log.status_code || log.status_code >= 400,
-                      }"
-                      >{{ log.status_code ?? "ERR" }}</span
-                    >
-                  </td>
-                  <td>{{ log.attempt_count }}</td>
-                  <td>{{ formatLatency(log.latency_ms) }}</td>
-                  <td>
-                    <code>{{ log.id.slice(0, 12) }}</code>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </template>
+      <PoolOverviewPanel
+        v-if="activeTab === 'overview'"
+        v-model:selected-key-id="selectedKeyId"
+        :pool="pool"
+        :keys="keys"
+        :logs="logs"
+        :snapshots="snapshots"
+        :show-usage-skeleton="showUsageSkeleton"
+      />
 
       <PoolKeysPanel
         v-else-if="activeTab === 'keys'"
@@ -591,7 +442,7 @@ onMounted(load)
         <EmptyState
           v-if="!logs?.items.length"
           title="这个池还没有请求"
-          description="使用中转 Key 调用 /search 后即可查看完整尝试链。"
+          description="使用中转 Key 调用任一受支持接口后即可查看完整尝试链。"
         />
         <RequestLogList
           v-else
@@ -612,131 +463,12 @@ onMounted(load)
         @delete="requestDeleteRelay"
       />
 
-      <form v-else class="panel settings-form" @submit.prevent="saveSettings">
-        <div class="section-heading">
-          <div>
-            <h2>池级路由设置</h2>
-            <p>保存后通过新的 Runtime 快照应用，不阻塞正在进行的请求。</p>
-          </div>
-        </div>
-        <div class="form-grid">
-          <label class="field"
-            ><span>池名称</span><input v-model.trim="settingsForm.name" required
-          /></label>
-          <div class="field">
-            <span>路由策略</span>
-            <SelectControl v-model="settingsForm.strategy" :options="routingOptions" />
-          </div>
-          <label class="field field--span"
-            ><span>描述</span><textarea v-model="settingsForm.description" rows="3" /></label
-          ><label class="field"
-            ><span>检测间隔（秒）</span
-            ><input
-              v-model.number="settingsForm.monitor_interval_seconds"
-              type="number"
-              min="60"
-              max="86400" /></label
-          ><label class="field"
-            ><span>最大尝试次数</span
-            ><input
-              v-model.number="settingsForm.max_attempts"
-              type="number"
-              min="1"
-              max="10" /></label
-          ><label class="field"
-            ><span>并发上限</span
-            ><input
-              v-model.number="settingsForm.concurrency_limit"
-              type="number"
-              min="1"
-              placeholder="不限制" /></label
-          ><label class="field"
-            ><span>每分钟请求上限</span
-            ><input
-              v-model.number="settingsForm.rpm_limit"
-              type="number"
-              min="1"
-              placeholder="不限制"
-          /></label>
-        </div>
-        <label class="switch-field"
-          ><input v-model="settingsForm.enabled" type="checkbox" /><span
-            ><strong>启用账号池</strong><small>停用后所有中转凭证会立即停止路由。</small></span
-          ></label
-        >
-        <div class="section-divider"></div>
-        <div class="section-heading">
-          <div>
-            <h2>连接覆盖</h2>
-            <p>默认继承全局 Tavily 地址和 Clash HTTP 代理；开启后仅影响这个池。</p>
-          </div>
-        </div>
-        <label class="switch-field"
-          ><input v-model="connectionOverride" type="checkbox" /><span
-            ><strong>覆盖全局连接配置</strong
-            ><small>关闭并保存会清除当前池的全部连接覆盖。</small></span
-          ></label
-        >
-        <div v-if="connectionOverride" class="form-grid">
-          <label class="field field--span"
-            ><span>Tavily Base URL（留空继承全局）</span
-            ><input
-              v-model.trim="settingsForm.upstream_base_url"
-              type="url"
-              placeholder="https://api.tavily.com"
-          /></label>
-          <div class="field">
-            <label for="pool-http-proxy">HTTP 代理</label>
-            <input
-              id="pool-http-proxy"
-              v-model.trim="settingsForm.http_proxy"
-              type="url"
-              :placeholder="pool.http_proxy || 'http://127.0.0.1:7890'"
-              @input="proxyTouched.http = true"
-            /><small v-if="pool.http_proxy && !proxyTouched.http"
-              >当前：{{ pool.http_proxy }}</small
-            ><button
-              v-if="pool.http_proxy"
-              class="field-action"
-              type="button"
-              @click="clearPoolProxy('http')"
-            >
-              清除池级 HTTP 代理
-            </button>
-          </div>
-          <div class="field">
-            <label for="pool-https-proxy">HTTPS 代理</label>
-            <input
-              id="pool-https-proxy"
-              v-model.trim="settingsForm.https_proxy"
-              type="url"
-              :placeholder="pool.https_proxy || 'http://127.0.0.1:7890'"
-              @input="proxyTouched.https = true"
-            /><small v-if="pool.https_proxy && !proxyTouched.https"
-              >当前：{{ pool.https_proxy }}</small
-            ><button
-              v-if="pool.https_proxy"
-              class="field-action"
-              type="button"
-              @click="clearPoolProxy('https')"
-            >
-              清除池级 HTTPS 代理
-            </button>
-          </div>
-          <label class="switch-field field--span"
-            ><input v-model="settingsForm.allow_direct_fallback" type="checkbox" /><span
-              ><strong>代理失败时允许直连</strong
-              ><small>可能使流量绕过代理，默认建议关闭。</small></span
-            ></label
-          >
-        </div>
-        <div class="form-actions">
-          <UiButton variant="danger" @click="deletePoolOpen = true">
-            <Trash2 :size="16" />删除账号池
-          </UiButton>
-          <UiButton variant="primary" type="submit">保存池设置</UiButton>
-        </div>
-      </form>
+      <PoolSettingsPanel
+        v-else
+        :pool="pool"
+        @save="saveSettings"
+        @delete="deletePoolOpen = true"
+      />
     </template>
 
     <BaseModal
