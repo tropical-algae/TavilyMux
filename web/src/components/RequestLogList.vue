@@ -26,6 +26,7 @@ defineEmits<{
         <ChevronDown v-if="expanded.has(log.id)" :size="17" />
         <ChevronRight v-else :size="17" />
         <time>{{ formatDate(log.created_at) }}</time>
+        <span class="log-entry__endpoint">{{ log.method }} {{ log.path }}</span>
         <code>{{ log.id }}</code>
         <span
           class="http-status"
@@ -33,11 +34,14 @@ defineEmits<{
         >
           {{ log.status_code ?? "ERR" }}
         </span>
-        <span>{{ log.attempt_count }} 次尝试</span>
+        <span class="log-entry__attempts">{{ log.attempt_count }} 次尝试</span>
         <strong>{{ formatLatency(log.latency_ms) }}</strong>
       </button>
       <div v-if="expanded.has(log.id)" class="attempt-trace">
         <div class="attempt-trace__meta">
+          <span
+            >接口：<code>{{ log.endpoint }}</code></span
+          >
           <span
             >最终 Key：<code>{{ log.final_key_id || "未选择" }}</code></span
           >

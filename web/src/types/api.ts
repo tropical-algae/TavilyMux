@@ -162,6 +162,9 @@ export interface ProxyLog {
   status_code: number | null
   latency_ms: number | null
   attempt_count: number
+  method: string
+  endpoint: string
+  path: string
   credits: number | null
   error_type: string | null
   external_request_id: string | null

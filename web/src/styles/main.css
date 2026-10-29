@@ -2255,7 +2255,7 @@ tbody tr:hover {
   display: grid;
   width: 100%;
   min-height: 64px;
-  grid-template-columns: 18px 150px minmax(180px, 1fr) 62px 90px 86px;
+  grid-template-columns: 18px 150px minmax(150px, 0.8fr) minmax(180px, 1fr) 62px 90px 86px;
   align-items: center;
   gap: 14px;
   padding: 10px 18px;
@@ -2282,6 +2282,14 @@ tbody tr:hover {
 
 .log-entry__summary code {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-entry__endpoint {
+  overflow: hidden;
+  color: var(--text) !important;
+  font-weight: var(--font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2922,7 +2930,8 @@ tbody tr:hover {
   }
 
   .log-entry__summary time,
-  .log-entry__summary > span:nth-of-type(2) {
+  .log-entry__endpoint,
+  .log-entry__attempts {
     display: none;
   }
 
