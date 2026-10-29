@@ -1,97 +1,117 @@
-# TavilyMux
+<div align="center">
+  <img width="112" src="web/public/tavily-mux.svg" alt="TavilyMux Logo" />
+</div>
+<div align="center">
+  <img src="web/public/tavily-mux-name.svg" alt="TavilyMux" />
+</div>
+<p align="center"><strong>A high-performance, self-hosted Tavily key pool and transparent search gateway</strong></p>
+<p align="center">
+  <a href="https://github.com/tropical-algae/TavilyMux/actions/workflows/ci.yaml"><img src="https://github.com/tropical-algae/TavilyMux/actions/workflows/ci.yaml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/tropical-algae/TavilyMux/actions/workflows/release.yaml"><img src="https://github.com/tropical-algae/TavilyMux/actions/workflows/release.yaml/badge.svg" alt="Release" /></a>
+  <a href="README_CN.md"><img src="https://img.shields.io/badge/README-简体中文-red.svg" alt="README-简体中文" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License" /></a>
+</p>
 
-[中文](README_CN.md)
+TavilyMux organizes multiple Tavily keys into isolated account pools and provides a unified API gateway through a Tavily Search-compatible interface.
 
-A self-hosted Tavily API-key pool with a transparent, high-concurrency `/search` relay and a Web management console.
+The service selects an available key according to each pool's routing policy, performs controlled failover when an upstream request fails, and includes quota monitoring, request logs, and a Web management console.
 
-## Highlights
+## Features
 
-- Schema-free Tavily Search forwarding: unknown request/response fields pass through unchanged.
-- In-memory `max remaining quota` or `random available key` routing with automatic failover.
-- Multiple isolated pools and rotatable relay keys.
-- Encrypted Tavily keys and proxy credentials; hashed management and relay keys.
-- Periodic `/usage` monitoring, quota timelines, request/attempt logs, and current alerts.
-- Global or pool-level Tavily URL and Clash-compatible HTTP/HTTPS proxy settings.
-- SQLite persistence, asynchronous batched event writes, Docker, Nginx, CI, and semantic releases.
+- **Multiple account pools**: Configure multiple isolated pools, each with its own routing policy, connection settings, and relay credentials.
+- **In-memory routing**: Choose between two routing strategies.
+- **Failover**: Cool down or disable unhealthy keys according to the upstream error type, then select another available key when permitted.
+- **Quota monitoring**: Periodically query Tavily Usage and display key-level and account-level quotas.
+- **Observability**: Record request outcomes, internal attempts, latency, and key usage.
+- **Proxy support**: Configure global or pool-level HTTP/HTTPS proxies, including services such as Clash.
+- **Secure storage**: Encrypt Tavily keys and proxy credentials while storing only hashes or digests of management and relay keys.
 
-## Run with Docker Compose
+## Getting Started
+
+The TavilyMux Web console, management API, and Search relay share port `8080`. Once the service is running, open [`http://localhost:8080`](http://localhost:8080).
+
+<details>
+
+<summary><strong>🐳 Docker Setup</strong> - Click to expand</summary>
+
+</br>
+
+Create a persistent data directory and start the container:
 
 ```bash
-docker compose up --build -d
-docker compose logs app
+mkdir -p data
+
+docker run -d \
+  --name tavilymux \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v "$(pwd)/data:/data" \
+  -e TAVILY_MUX_ADMIN_SECRET='an administration key of at least 12 characters' \
+  tropicalalgae/tavilymux:latest
 ```
 
-Open `http://localhost:8080`. On a brand-new data volume, set `TAVILY_MUX_ADMIN_SECRET` in `.env`; if omitted, the service generates a strong management key and prints it once in the app log.
+</details>
 
-Data and the generated encryption key live in the `tavily-mux-data` volume. Back up the whole volume—`database.db` is unusable without `master.key`.
+<details>
 
-If Clash runs on the Docker host, use a proxy URL such as `http://host.docker.internal:7890`. Compose maps that hostname on Linux as well.
+<summary><strong>📦 Docker Compose Setup</strong> - Click to expand</summary>
 
-## Search relay
-
-Create a pool, add Tavily keys, then copy its one-time relay key:
+</br>
 
 ```bash
-curl http://localhost:8080/search \
-  -H 'Authorization: Bearer tpool_your_relay_key' \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"latest Python release","search_depth":"advanced"}'
+mkdir -p data
+docker compose up -d --build
 ```
 
-The service only reads the relay authorization, replaces it with a selected Tavily key, and forwards the raw query string, body, supported headers, status, response headers, and response stream. It does not define Tavily's Search schema locally.
+Compose runs a standalone Nginx instance in front of TavilyMux, with Nginx exposing the service port.
+
+Nginx handles Gzip compression, timeouts, and streaming response buffering policy, but it is not a functional dependency of TavilyMux.
+
+When the application image is run on its own, the Web console and all APIs remain fully available. If your deployment already uses Caddy, Traefik, Nginx, or a cloud gateway, you can use the Docker setup directly.
+
+</details>
+
+> [!IMPORTANT]
+> `TAVILY_MUX_ADMIN_SECRET` is used only to initialize the management key on first startup.
+> If it is not configured, TavilyMux generates a random management key and prints it in the logs.
 
 ## Configuration
 
-Startup settings support environment variables, `.env`, and YAML with this precedence:
+TavilyMux can load configuration from environment variables, an [.env](.env.example) file, and a [config.yaml](config.yaml.example) file. The default configuration file path is `/data/config.yaml`. The key settings are listed below:
 
-```text
-environment > .env > config.yaml > defaults
-```
+| YAML field               | Environment variable                | Description                                                                                          |
+| ------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ADMIN_SECRET`           | `TAVILY_MUX_ADMIN_SECRET`           | Management key used during first-time initialization; must contain at least 12 characters            |
+| `MASTER_KEY`             | `TAVILY_MUX_MASTER_KEY`             | Optional encryption master key; normally generated automatically and persisted at `/data/master.key` |
+| `COOKIE_SECURE`          | `TAVILY_MUX_COOKIE_SECURE`          | Set to `true` when serving TavilyMux over HTTPS                                                      |
+| `DATABASE_URL`           | `TAVILY_MUX_DATABASE_URL`           | Uses `/data/database.db` by default and normally does not need to be changed                         |
+| `MAX_REQUEST_BODY_BYTES` | `TAVILY_MUX_MAX_REQUEST_BODY_BYTES` | Maximum Search request body size                                                                     |
+| `GLOBAL_MAX_CONCURRENCY` | `TAVILY_MUX_GLOBAL_MAX_CONCURRENCY` | Maximum global concurrency for a single instance                                                     |
 
-See [.env.example](.env.example) and [config.yaml.example](config.yaml.example). Runtime Tavily URL, proxies, monitoring interval, timeout, failover attempts, and retention are managed in the Web console.
-
-Reset a lost management key from the deployment environment; this also revokes existing sessions:
+If the management key is lost, generate a new one and revoke all existing login sessions:
 
 ```bash
+# Docker deployment:
+docker exec -it tavilymux tavily-mux reset-admin-secret
+# Compose deployment:
 docker compose run --rm app reset-admin-secret
-# or: tavily-mux reset-admin-secret --secret 'a-new-long-management-key'
 ```
 
-The generated value is shown once. Passing a secret on the command line can expose it in shell history, so generation is preferred.
+## Local Development
 
-## Local development
+Local development requires Python 3.13, uv, Node.js 24, and npm.
+See the [local development guide](docs/en/development.md) for dependency installation, backend and frontend startup, testing, and build instructions.
 
-Requirements: Python 3.13, `uv`, Node.js 24, and npm.
+## Current Limitations
 
-```bash
-uv sync --frozen
-npm --prefix web ci
-uv run poe test-all
-uv run poe run
-```
-
-Run the Vite development server separately with `npm --prefix web run dev`. Build the production console with `npm --prefix web run build` and set `TAVILY_MUX_WEB_ROOT=web/dist` when serving it directly from FastAPI.
-
-Useful commands:
-
-```bash
-uv run poe lint
-uv run poe type-check
-uv run poe test
-npm --prefix web run lint
-npm --prefix web run type-check
-npm --prefix web run test
-npm --prefix web run build
-```
-
-## Deployment notes
-
-- V0.1 intentionally uses one service instance and one Uvicorn worker. In-memory routing and rate state are not shared across workers or replicas.
-- Nginx disables response buffering for `/search`; do not add a buffering proxy in front of it if streaming latency matters.
-- Set `TAVILY_MUX_COOKIE_SECURE=true` behind HTTPS.
-- Do not expose the app container port directly when Nginx is the public entry point.
-- Tavily keys, relay keys, proxy passwords, and full search bodies are not written to product request logs.
+- [ ] Support Tavily Extract, Crawl, Map, and Research endpoints in addition to Search.
+- [ ] Support multiple Uvicorn workers or replicas; routing state, concurrency control, and key cooldown state currently live in the memory of a single instance.
+- [ ] Support external persistent databases such as PostgreSQL.
+- [ ] ~~Support multiple administrators, role-based access control, and isolated management spaces; the service currently uses a single management key.~~
+- [ ] Provide integrated backup and restore tooling for account pools, configuration, and encrypted data.
+- [ ] Provide Prometheus metrics, OpenTelemetry traces, and more comprehensive runtime alert integrations.
+- [ ] Provide built-in HTTPS certificate management; TLS should currently be terminated by Nginx, Caddy, Traefik, or a cloud gateway.
 
 ## License
 
-[MIT](LICENSE)
+TavilyMux is released under the [MIT License](LICENSE).

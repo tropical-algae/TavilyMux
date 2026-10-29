@@ -1,97 +1,118 @@
-# TavilyMux
+<div align="center">
+  <img width="112" src="web/public/tavily-mux.svg" alt="TavilyMux Logo" />
+</div>
+<div align="center">
+  <img src="web/public/tavily-mux-name.svg" alt="TavilyMux" />
+</div>
+<p align="center"><strong>高性能、自托管的 Tavily Key 池与透明搜索网关</strong></p>
+<p align="center">
+  <a href="https://github.com/tropical-algae/TavilyMux/actions/workflows/ci.yaml"><img src="https://github.com/tropical-algae/TavilyMux/actions/workflows/ci.yaml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/tropical-algae/TavilyMux/actions/workflows/release.yaml"><img src="https://github.com/tropical-algae/TavilyMux/actions/workflows/release.yaml/badge.svg" alt="Release" /></a>
+  <a href="README.md"><img src="https://img.shields.io/badge/README-EN-blue.svg" alt="README-EN" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License" /></a>
+</p>
 
-[English](README.md)
+TavilyMux 将多个 Tavily Key 组织成相互隔离的账号池，并通过兼容 Tavily Search 的接口提供统一的 API 网关
 
-一个可自托管的 Tavily API Key 池：提供透明、高并发的 `/search` 中转接口和 Web 管理控制台。
+服务会按池内规则选择可用 Key，在上游请求失败时执行受控切换，同时提供额度监控、请求日志和 Web 管理控制台
 
-## 主要能力
+## 特性说明
 
-- Tavily Search 无固定 Schema 转发：官方新增请求或响应字段无需重新发版。
-- 在内存中按“剩余额度最多”或“随机可用”选择 Key，遇到额度、鉴权、限流或网络错误自动切换。
-- 支持多个隔离账号池，以及可轮换、停用和吊销的中转 Key。
-- Tavily Key 与代理凭据加密存储，管理密钥与中转 Key 只保存哈希或摘要。
-- 定时查询 `/usage`，提供额度时间线、请求/内部尝试日志和当前告警。
-- 支持全局及池级 Tavily 地址、Clash HTTP/HTTPS 代理配置。
-- SQLite 持久化、后台异步批量落库、Docker、Nginx、CI 与语义化发布。
+- **多账号池**：支持配置多个隔离的账号池，拥有独立的路由规则、连接配置和中转凭证
+- **内存路由**：支持2种路由策略
+- **故障切换**：根据上游错误类型冷却或停用异常 Key，并在允许的范围内选择其他可用 Key
+- **额度监控**：定期读取 Tavily Usage，展示 Key 与账户额度
+- **可观测性**：记录请求结果、内部尝试、耗时和 Key 使用情况
+- **代理支持**：支持全局或账号池级 HTTP/HTTPS 代理，可连接 Clash 等代理服务
+- **安全存储**：Tavily Key 和代理凭据加密保存，管理密钥和中转 Key 仅保存哈希或摘要
 
-## Docker Compose 启动
+## 启动方法
 
-```bash
-docker compose up --build -d
-docker compose logs app
-```
+TavilyMux 的 Web 控制台、管理 API 和 Search 中转共用 `8080` 端口。启动后访问
+[`http://localhost:8080`](http://localhost:8080)
 
-访问 `http://localhost:8080`。首次使用新数据卷时，可以在 `.env` 配置 `TAVILY_MUX_ADMIN_SECRET`；未配置则自动生成高强度管理密钥，并仅在 app 首次初始化日志中完整显示一次。
+<details>
 
-数据库和自动生成的加密主密钥都保存在 `tavily-mux-data` 卷。备份时必须备份整个卷；缺少 `master.key` 时，`database.db` 中的敏感数据无法解密。
+<summary><strong>🐳 Docker Setup</strong> - Click to expand</summary>
 
-如果 Clash 运行在 Docker 宿主机，可填写 `http://host.docker.internal:7890`。Compose 已为 Linux 配置该主机名映射。
+</br>
 
-## 调用 Search 中转
-
-在 Web 页面创建账号池、添加 Tavily Key，并保存只显示一次的中转 Key：
-
-```bash
-curl http://localhost:8080/search \
-  -H 'Authorization: Bearer tpool_your_relay_key' \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"Python 最新版本","search_depth":"advanced"}'
-```
-
-服务只解析中转鉴权并替换成选中的 Tavily Key；查询字符串、请求体、允许转发的请求头、状态码、响应头和响应流均尽可能原样传递。本地不定义 Tavily Search 的字段模型。
-
-## 配置
-
-启动配置支持环境变量、`.env` 和 YAML，优先级为：
-
-```text
-环境变量 > .env > config.yaml > 默认值
-```
-
-完整示例见 [.env.example](.env.example) 和 [config.yaml.example](config.yaml.example)。Tavily 地址、代理、监控间隔、请求超时、切换次数和日志保留时间可在 Web 页面动态修改。
-
-管理密钥遗失时，可在部署环境重置；重置会同时使已有登录会话失效：
+准备一个持久化目录，然后启动容器：
 
 ```bash
+mkdir -p data
+
+docker run -d \
+  --name tavilymux \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v "$(pwd)/data:/data" \
+  -e TAVILY_MUX_ADMIN_SECRET='至少 12 位的管理密钥' \
+  tropicalalgae/tavilymux:latest
+```
+
+</details>
+
+<details>
+
+<summary><strong>📦 Docker Compose Setup</strong> - Click to expand</summary>
+
+</br>
+
+```bash
+mkdir -p data
+docker compose up -d --build
+```
+
+Compose 会在 TavilyMux 前运行一个独立的 Nginx，并由 Nginx 暴露服务端口
+
+Nginx 负责 Gzip、超时和流式响应缓冲策略，但不是 TavilyMux 的功能依赖
+
+单独运行应用镜像时，Web 控制台和所有 API 仍然完整可用。如果部署环境已经有 Caddy、Traefik、Nginx 或云端网关，可以直接使用 Docker Run 方式
+
+</details>
+
+> [!IMPORTANT]
+> `TAVILY_MUX_ADMIN_SECRET` 只用于首次初始化管理密钥
+> 如果首次启动时未配置，TavilyMux 会随机生成一个管理密钥，并在日志中显示
+
+## 配置方法
+
+TavilyMux 支持通过环境变量、[.env](.env.example) 和 [config.yaml](config.yaml.example) 加载配置，配置文件默认路径为 `/data/config.yaml`。关键配置项如下：
+
+| YAML 字段                | 环境变量                            | 说明                                                               |
+| ------------------------ | ----------------------------------- | ------------------------------------------------------------------ |
+| `ADMIN_SECRET`           | `TAVILY_MUX_ADMIN_SECRET`           | 首次初始化使用的登录管理密钥，至少 12 位                           |
+| `MASTER_KEY`             | `TAVILY_MUX_MASTER_KEY`             | 可选的加密主密钥；通常让服务在 `/data/master.key` 自动生成并持久化 |
+| `COOKIE_SECURE`          | `TAVILY_MUX_COOKIE_SECURE`          | 通过 HTTPS 对外提供服务时应设置为 `true`                           |
+| `DATABASE_URL`           | `TAVILY_MUX_DATABASE_URL`           | 默认使用 `/data/database.db`，通常无需修改                         |
+| `MAX_REQUEST_BODY_BYTES` | `TAVILY_MUX_MAX_REQUEST_BODY_BYTES` | Search 请求体大小上限                                              |
+| `GLOBAL_MAX_CONCURRENCY` | `TAVILY_MUX_GLOBAL_MAX_CONCURRENCY` | 单实例允许的全局并发数                                             |
+
+如果遗失管理密钥，可以生成新密钥并撤销已有登录会话：
+
+```bash
+# Docker 部署：
+docker exec -it tavilymux tavily-mux reset-admin-secret
+# Compose 部署：
 docker compose run --rm app reset-admin-secret
-# 或：tavily-mux reset-admin-secret --secret '一个新的长管理密钥'
 ```
-
-自动生成的值只显示一次。命令行直接传入密钥可能进入 Shell 历史，推荐让程序随机生成。
 
 ## 本地开发
 
-需要 Python 3.13、`uv`、Node.js 24 和 npm。
+本地开发需要 Python 3.13、uv、Node.js 24 和 npm
+依赖安装、前后端启动、测试和构建方式见[本地开发指南](docs/cn/development.md)
 
-```bash
-uv sync --frozen
-npm --prefix web ci
-uv run poe test-all
-uv run poe run
-```
+## 当前局限
 
-开发前端时另开终端执行 `npm --prefix web run dev`。生产构建使用 `npm --prefix web run build`；需要由 FastAPI 直接托管时设置 `TAVILY_MUX_WEB_ROOT=web/dist`。
-
-常用检查命令：
-
-```bash
-uv run poe lint
-uv run poe type-check
-uv run poe test
-npm --prefix web run lint
-npm --prefix web run type-check
-npm --prefix web run test
-npm --prefix web run build
-```
-
-## 部署注意事项
-
-- V0.1 明确采用单服务实例、单 Uvicorn Worker；多个 Worker 或副本之间无法共享内存路由和限流状态。
-- Nginx 已关闭 `/search` 响应缓冲；如果关注流式延迟，不要在更外层重新开启缓冲。
-- HTTPS 部署时设置 `TAVILY_MUX_COOKIE_SECURE=true`。
-- 使用 Nginx 作为公开入口时，不要额外暴露 app 容器端口。
-- 产品请求日志不保存 Tavily Key、中转 Key、代理密码或完整搜索正文。
+- [ ] 支持除 Search 之外的 Tavily Extract、Crawl、Map 和 Research 接口
+- [ ] 支持多个 Uvicorn Worker 或多副本部署；当前路由状态、并发控制和 Key 冷却状态保存在单实例内存中
+- [ ] 支持 PostgreSQL 等外部持久化数据库
+- [ ] ~~支持多管理员、角色权限和相互隔离的管理空间；当前服务使用单一管理密钥~~
+- [ ] 提供账号池、配置和加密数据的一体化备份与恢复工具
+- [ ] 提供 Prometheus 指标、OpenTelemetry Trace 和更完整的运行告警集成
+- [ ] 内置 HTTPS 证书管理；当前应由 Nginx、Caddy、Traefik 或云端网关终止 TLS
 
 ## 许可证
 
-[MIT](LICENSE)
+TavilyMux 使用 [MIT License](LICENSE) 发布。
