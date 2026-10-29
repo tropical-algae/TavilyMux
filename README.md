@@ -1,8 +1,16 @@
 <div align="center">
-  <img width="112" src="web/public/tavily-mux.svg" alt="TavilyMux Logo" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/tavily-mux-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="web/public/tavily-mux.svg" />
+    <img width="112" src="web/public/tavily-mux.svg" alt="TavilyMux Logo" />
+  </picture>
 </div>
 <div align="center">
-  <img src="web/public/tavily-mux-name.svg" alt="TavilyMux" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/tavily-mux-name-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="web/public/tavily-mux-name.svg" />
+    <img src="web/public/tavily-mux-name.svg" alt="TavilyMux" />
+  </picture>
 </div>
 <p align="center"><strong>A high-performance, self-hosted Tavily key pool and transparent API gateway</strong></p>
 <p align="center">
