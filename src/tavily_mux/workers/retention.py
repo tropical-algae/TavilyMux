@@ -1,5 +1,4 @@
-import asyncio
-from contextlib import suppress
+import threading
 from datetime import timedelta
 
 from loguru import logger
@@ -18,26 +17,29 @@ from tavily_mux.persistence.models import (
 class RetentionWorker:
     def __init__(self, database: Database) -> None:
         self._database = database
-        self._stop = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        if self._task is None:
-            self._task = asyncio.create_task(self._run(), name="retention-worker")
+        if self._thread is None:
+            self._thread = threading.Thread(
+                target=self._run,
+                name="retention-worker",
+                daemon=True,
+            )
+            self._thread.start()
 
     async def stop(self) -> None:
-        task = self._task
-        if task is None:
+        thread = self._thread
+        if thread is None:
             return
         self._stop.set()
-        await task
-        self._task = None
+        thread.join()
+        self._thread = None
 
-    async def _run(self) -> None:
-        while not self._stop.is_set():
+    def _run(self) -> None:
+        while not self._stop.wait(timeout=3600):
             self.cleanup()
-            with suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=3600)
 
     def cleanup(self) -> None:
         try:

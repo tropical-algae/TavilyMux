@@ -2,18 +2,33 @@ import queue
 import threading
 
 from loguru import logger
+from sqlalchemy.orm import Session
 
+from tavily_mux.common.time import utc_now
+from tavily_mux.domain.enums import KeyStatus
 from tavily_mux.persistence.database import Database
-from tavily_mux.persistence.models import ProxyAttempt, ProxyRequest, RelayKey, TavilyKey
-from tavily_mux.workers.events import ProxyRequestEvent
+from tavily_mux.persistence.models import (
+    ProxyAttempt,
+    ProxyRequest,
+    RelayKey,
+    TaskAffinity,
+    TavilyKey,
+    UsageSnapshot,
+)
+from tavily_mux.workers.events import (
+    ProxyRequestEvent,
+    TaskAffinityEvent,
+    UsageSnapshotEvent,
+)
 
 _STOP = object()
+type PersistEvent = ProxyRequestEvent | TaskAffinityEvent | UsageSnapshotEvent
 
 
 class EventWriter:
     def __init__(self, database: Database, *, queue_size: int) -> None:
         self._database = database
-        self._queue: queue.Queue[ProxyRequestEvent | object] = queue.Queue(queue_size)
+        self._queue: queue.Queue[PersistEvent | object] = queue.Queue(queue_size)
         self._thread: threading.Thread | None = None
         self.dropped_events = 0
 
@@ -39,11 +54,27 @@ class EventWriter:
         self._thread = None
 
     def emit(self, event: ProxyRequestEvent) -> bool:
+        return self._emit(event, label="request log")
+
+    def emit_affinity(self, pool_id: str, resource_id: str, key_id: str) -> bool:
+        return self._emit(
+            TaskAffinityEvent(
+                pool_id=pool_id,
+                resource_id=resource_id,
+                key_id=key_id,
+            ),
+            label="task affinity",
+        )
+
+    def emit_usage(self, event: UsageSnapshotEvent) -> bool:
+        return self._emit(event, label="usage snapshot")
+
+    def _emit(self, event: PersistEvent, *, label: str) -> bool:
         try:
             self._queue.put_nowait(event)
         except queue.Full:
             self.dropped_events += 1
-            logger.error("Proxy event queue is full; request log was dropped")
+            logger.error("Persistence event queue is full; {} was dropped", label)
             return False
         return True
 
@@ -73,13 +104,25 @@ class EventWriter:
             for _ in batch:
                 self._queue.task_done()
 
-    def _write(self, events: list[ProxyRequestEvent | object]) -> None:
-        typed_events = [event for event in events if isinstance(event, ProxyRequestEvent)]
-        if not typed_events:
+    def _write(self, events: list[PersistEvent | object]) -> None:
+        state_events = [
+            event
+            for event in events
+            if isinstance(event, ProxyRequestEvent | UsageSnapshotEvent)
+        ]
+        affinity_events = {
+            (event.pool_id, event.resource_id): event
+            for event in events
+            if isinstance(event, TaskAffinityEvent)
+        }
+        if not state_events and not affinity_events:
             return
         try:
             with self._database.session() as session:
-                for event in typed_events:
+                for event in state_events:
+                    if isinstance(event, UsageSnapshotEvent):
+                        self._write_usage(session, event)
+                        continue
                     request_row = ProxyRequest(
                         id=event.request_id,
                         pool_id=event.pool_id,
@@ -129,6 +172,53 @@ class EventWriter:
                         key.success_count = state.success_count
                         key.failure_count = state.failure_count
                         key.last_error = state.last_error
+                for affinity, affinity_event in affinity_events.items():
+                    row = session.get(TaskAffinity, affinity)
+                    if row is None:
+                        session.add(
+                            TaskAffinity(
+                                pool_id=affinity_event.pool_id,
+                                resource_id=affinity_event.resource_id,
+                                key_id=affinity_event.key_id,
+                            )
+                        )
+                    else:
+                        row.key_id = affinity_event.key_id
+                        row.created_at = utc_now()
                 session.commit()
         except Exception:
-            logger.exception("Unable to persist proxy event batch")
+            logger.exception("Unable to persist event batch")
+
+    @staticmethod
+    def _write_usage(session: Session, event: UsageSnapshotEvent) -> None:
+        row = session.get(TavilyKey, event.key_id)
+        if row is None:
+            return
+        row.status = event.status
+        row.last_checked_at = event.checked_at
+        row.last_error = event.error
+        if event.status in {
+            KeyStatus.AVAILABLE.value,
+            KeyStatus.LOW_QUOTA.value,
+            KeyStatus.EXHAUSTED.value,
+        }:
+            row.usage = event.usage
+            row.usage_limit = event.usage_limit
+            row.account_plan = event.account_plan
+            row.account_plan_usage = event.account_plan_usage
+            row.account_plan_limit = event.account_plan_limit
+            row.paygo_usage = event.paygo_usage
+            row.paygo_limit = event.paygo_limit
+        session.add(
+            UsageSnapshot(
+                key_id=event.key_id,
+                captured_at=event.checked_at,
+                usage=row.usage,
+                usage_limit=row.usage_limit,
+                account_plan_usage=row.account_plan_usage,
+                account_plan_limit=row.account_plan_limit,
+                paygo_usage=row.paygo_usage,
+                paygo_limit=row.paygo_limit,
+                status=event.status,
+            )
+        )

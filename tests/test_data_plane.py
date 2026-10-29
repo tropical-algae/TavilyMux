@@ -9,8 +9,8 @@ from cryptography.fernet import Fernet
 from fastapi import FastAPI
 
 from tavily_mux.app import create_app
-from tavily_mux.common.config import Settings
-from tavily_mux.domain.endpoints import EndpointSettings
+from tavily_mux.common.config import EndpointSettings, Settings
+from tavily_mux.persistence.models import TaskAffinity
 from tavily_mux.services.bootstrap import ApplicationContext
 
 
@@ -175,7 +175,7 @@ async def test_research_status_uses_the_key_that_created_the_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app, client = app_client
-    _, relay_key = await provision_pool(client, keys=2)
+    pool_id, relay_key = await provision_pool(client, keys=2)
     calls: list[tuple[str, str, str]] = []
 
     async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
@@ -200,6 +200,10 @@ async def test_research_status_uses_the_key_that_created_the_task(
         headers={"Authorization": f"Bearer {relay_key}"},
         json={"input": "investigate"},
     )
+    await context.events.flush()
+    with context.database.session() as session:
+        affinity = session.get(TaskAffinity, (pool_id, "research-task-1"))
+        assert affinity is not None
     context.runtime.load()
     checked = await client.get(
         "/research/research-task-1",

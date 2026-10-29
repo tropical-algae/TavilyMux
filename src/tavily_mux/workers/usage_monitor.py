@@ -10,24 +10,25 @@ from tavily_mux.common.time import utc_now
 from tavily_mux.domain.enums import KeyStatus
 from tavily_mux.domain.quota import calculate_quota, status_for_quota
 from tavily_mux.integrations.tavily.client_manager import TavilyClientManager
-from tavily_mux.persistence.database import Database
-from tavily_mux.persistence.models import TavilyKey, UsageSnapshot
+from tavily_mux.integrations.tavily.error_classifier import key_status_for_http_error
 from tavily_mux.runtime.models import KeyRuntime, PoolRuntime
 from tavily_mux.runtime.registry import RuntimeRegistry
+from tavily_mux.workers.event_writer import EventWriter
+from tavily_mux.workers.events import UsageSnapshotEvent
 
 
 class UsageMonitor:
     def __init__(
         self,
-        database: Database,
         runtime: RuntimeRegistry,
         clients: TavilyClientManager,
+        events: EventWriter,
         *,
         concurrency: int,
     ) -> None:
-        self._database = database
         self._runtime = runtime
         self._clients = clients
+        self._events = events
         self._semaphore = asyncio.Semaphore(concurrency)
         self._next_check: dict[str, float] = {}
         self._stop = asyncio.Event()
@@ -156,14 +157,7 @@ class UsageMonitor:
         status_code: int,
         checked_at,
     ) -> None:
-        if status_code == 401:
-            status = KeyStatus.INVALID
-        elif status_code == 429:
-            status = KeyStatus.RATE_LIMITED
-        elif status_code in {432, 433}:
-            status = KeyStatus.EXHAUSTED
-        else:
-            status = KeyStatus.CHECK_FAILED
+        status = key_status_for_http_error(status_code) or KeyStatus.CHECK_FAILED
         await self._persist_result(
             pool,
             key,
@@ -221,63 +215,21 @@ class UsageMonitor:
                     key.local_consumed - confirmed_local_consumption,
                     0,
                 )
-        self._persist_database_result(
-            key.id,
-            checked_at,
-            status,
-            usage,
-            usage_limit,
-            account_plan,
-            account_plan_usage,
-            account_plan_limit,
-            paygo_usage,
-            paygo_limit,
-            error,
-        )
-
-    def _persist_database_result(
-        self,
-        key_id: str,
-        checked_at,
-        status: KeyStatus,
-        usage: int | None,
-        usage_limit: int | None,
-        account_plan: str | None,
-        account_plan_usage: int | None,
-        account_plan_limit: int | None,
-        paygo_usage: int | None,
-        paygo_limit: int | None,
-        error: str | None,
-    ) -> None:
-        with self._database.session() as session:
-            row = session.get(TavilyKey, key_id)
-            if row is None:
-                return
-            row.status = status.value
-            row.last_checked_at = checked_at
-            row.last_error = error
-            if status in {KeyStatus.AVAILABLE, KeyStatus.LOW_QUOTA, KeyStatus.EXHAUSTED}:
-                row.usage = usage
-                row.usage_limit = usage_limit
-                row.account_plan = account_plan
-                row.account_plan_usage = account_plan_usage
-                row.account_plan_limit = account_plan_limit
-                row.paygo_usage = paygo_usage
-                row.paygo_limit = paygo_limit
-            session.add(
-                UsageSnapshot(
-                    key_id=key_id,
-                    captured_at=checked_at,
-                    usage=row.usage,
-                    usage_limit=row.usage_limit,
-                    account_plan_usage=row.account_plan_usage,
-                    account_plan_limit=row.account_plan_limit,
-                    paygo_usage=row.paygo_usage,
-                    paygo_limit=row.paygo_limit,
-                    status=status.value,
-                )
+        self._events.emit_usage(
+            UsageSnapshotEvent(
+                key_id=key.id,
+                checked_at=checked_at,
+                status=status.value,
+                usage=usage,
+                usage_limit=usage_limit,
+                account_plan=account_plan,
+                account_plan_usage=account_plan_usage,
+                account_plan_limit=account_plan_limit,
+                paygo_usage=paygo_usage,
+                paygo_limit=paygo_limit,
+                error=error,
             )
-            session.commit()
+        )
 
 
 def _optional_int(value: object) -> int | None:

@@ -11,6 +11,7 @@ from tavily_mux.persistence.database import Database
 from tavily_mux.persistence.migrate import upgrade_database
 from tavily_mux.persistence.models import AdminCredential, SystemSettings
 from tavily_mux.runtime.registry import RuntimeRegistry
+from tavily_mux.runtime.snapshot_loader import RuntimeSnapshotLoader
 from tavily_mux.workers.event_writer import EventWriter
 from tavily_mux.workers.retention import RetentionWorker
 from tavily_mux.workers.usage_monitor import UsageMonitor
@@ -73,21 +74,22 @@ def bootstrap_application(settings: Settings) -> ApplicationContext:
             session.add(SystemSettings(id=1))
         session.commit()
 
+    events = EventWriter(database, queue_size=settings.EVENT_QUEUE_SIZE)
     runtime = RuntimeRegistry(
-        database,
+        RuntimeSnapshotLoader(database, secrets),
         secrets,
         global_max_concurrency=settings.GLOBAL_MAX_CONCURRENCY,
+        affinity_sink=events.emit_affinity,
     )
     runtime.load()
     clients = TavilyClientManager(
         max_connections=settings.UPSTREAM_MAX_CONNECTIONS,
         max_keepalive_connections=settings.UPSTREAM_MAX_KEEPALIVE_CONNECTIONS,
     )
-    events = EventWriter(database, queue_size=settings.EVENT_QUEUE_SIZE)
     usage = UsageMonitor(
-        database,
         runtime,
         clients,
+        events,
         concurrency=settings.USAGE_CHECK_CONCURRENCY,
     )
     retention = RetentionWorker(database)

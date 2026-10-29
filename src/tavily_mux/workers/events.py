@@ -25,6 +25,28 @@ class KeyStateEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskAffinityEvent:
+    pool_id: str
+    resource_id: str
+    key_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class UsageSnapshotEvent:
+    key_id: str
+    checked_at: datetime
+    status: str
+    usage: int | None = None
+    usage_limit: int | None = None
+    account_plan: str | None = None
+    account_plan_usage: int | None = None
+    account_plan_limit: int | None = None
+    paygo_usage: int | None = None
+    paygo_limit: int | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ProxyRequestEvent:
     request_id: str
     pool_id: str

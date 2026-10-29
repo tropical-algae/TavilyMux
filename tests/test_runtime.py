@@ -13,6 +13,7 @@ from tavily_mux.persistence.database import Database
 from tavily_mux.persistence.migrate import upgrade_database
 from tavily_mux.persistence.models import Pool, RelayKey, SystemSettings, TavilyKey
 from tavily_mux.runtime.registry import RuntimeRegistry
+from tavily_mux.runtime.snapshot_loader import RuntimeSnapshotLoader
 
 
 @pytest.fixture
@@ -65,7 +66,11 @@ def runtime(tmp_path: Path) -> Iterator[tuple[RuntimeRegistry, str]]:
         )
         session.commit()
 
-    registry = RuntimeRegistry(database, secret_manager, global_max_concurrency=10)
+    registry = RuntimeRegistry(
+        RuntimeSnapshotLoader(database, secret_manager),
+        secret_manager,
+        global_max_concurrency=10,
+    )
     registry.load()
     yield registry, relay_token
     database.close()
