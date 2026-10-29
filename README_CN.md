@@ -120,10 +120,10 @@ TavilyMux 按“环境变量 → `.env` → `config.yaml` → 应用默认值”
 | `UPSTREAM_MAX_CONNECTIONS`              | `TAVILY_MUX_UPSTREAM_MAX_CONNECTIONS`           | `2000`                                  | 上游连接池最大连接数                          |
 | `UPSTREAM_MAX_KEEPALIVE_CONNECTIONS`    | `TAVILY_MUX_UPSTREAM_MAX_KEEPALIVE_CONNECTIONS` | `500`                                   | 上游连接池最大长连接数                        |
 | `USAGE_CHECK_CONCURRENCY`               | `TAVILY_MUX_USAGE_CHECK_CONCURRENCY`            | `10`                                    | 额度检测任务最大并发数                        |
-| `ENDPOINTS`                             | `TAVILY_MUX_ENDPOINTS`                          | `{"disabled":[],"custom":[]}`        | 内置接口禁用列表与自定义接口注册              |
+| `ENDPOINTS`                             | `TAVILY_MUX_ENDPOINTS`                          | `{"DISABLED":[],"CUSTOM":[]}`        | 内置接口禁用列表与自定义接口注册              |
 | —                                       | `TAVILY_MUX_CONFIG_FILE`                        | `./config.yaml`                         | YAML 配置文件路径，仅通过环境变量设置         |
 
-`ENDPOINTS.custom` 每项只要求填写 `path`，`method` 默认为 `POST`，也可设为 `GET`。自定义接口按无状态接口处理，暂不支持路径参数。注册表中的路径全局唯一，因此即使 Method 不同，同一路径也会冲突。简化结构见 [config.yaml.example](config.yaml.example)
+`ENDPOINTS.CUSTOM` 每项只要求填写 `PATH`，`METHOD` 默认为 `POST`，也可设为 `GET`。自定义接口按无状态接口处理，暂不支持路径参数。注册表中的路径全局唯一，因此即使 Method 不同，同一路径也会冲突。简化结构见 [config.yaml.example](config.yaml.example)
 
 如果遗失管理密钥，可以生成新密钥并撤销已有登录会话：
 

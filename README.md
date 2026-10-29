@@ -120,10 +120,10 @@ The table lists application defaults. The official Docker image overrides `DATA_
 | `UPSTREAM_MAX_CONNECTIONS`              | `TAVILY_MUX_UPSTREAM_MAX_CONNECTIONS`           | `2000`                                  | Maximum upstream connections                     |
 | `UPSTREAM_MAX_KEEPALIVE_CONNECTIONS`    | `TAVILY_MUX_UPSTREAM_MAX_KEEPALIVE_CONNECTIONS` | `500`                                   | Maximum upstream keep-alive connections          |
 | `USAGE_CHECK_CONCURRENCY`               | `TAVILY_MUX_USAGE_CHECK_CONCURRENCY`            | `10`                                    | Maximum quota-check task concurrency             |
-| `ENDPOINTS`                             | `TAVILY_MUX_ENDPOINTS`                          | `{"disabled":[],"custom":[]}`        | Built-in disable list and custom endpoint registry |
+| `ENDPOINTS`                             | `TAVILY_MUX_ENDPOINTS`                          | `{"DISABLED":[],"CUSTOM":[]}`        | Built-in disable list and custom endpoint registry |
 | —                                       | `TAVILY_MUX_CONFIG_FILE`                        | `./config.yaml`                         | YAML configuration path; environment-only        |
 
-`ENDPOINTS.custom` entries require only a `path`; `method` defaults to `POST` and may also be `GET`. Custom endpoints are stateless and cannot use path parameters. A path is unique across the registry, so the same path conflicts even when its HTTP method differs. See [config.yaml.example](config.yaml.example) for the compact structure.
+`ENDPOINTS.CUSTOM` entries require only a `PATH`; `METHOD` defaults to `POST` and may also be `GET`. Custom endpoints are stateless and cannot use path parameters. A path is unique across the registry, so the same path conflicts even when its HTTP method differs. See [config.yaml.example](config.yaml.example) for the compact structure.
 
 If the management key is lost, generate a new one and revoke all existing login sessions:
 

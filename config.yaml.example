@@ -24,9 +24,9 @@ USAGE_CHECK_CONCURRENCY: 10
 ENDPOINTS:
   # Available values: search, extract, crawl, map, research, feedback.
   # Disabling research disables both POST /research and GET /research/{request_id}.
-  disabled: []
-  custom: []
-  # custom:
-  #   - path: /future-endpoint
-  #   - path: /future-get
-  #     method: GET
+  DISABLED: []
+  CUSTOM: []
+  # CUSTOM:
+  #   - PATH: /future-endpoint
+  #   - PATH: /future-get
+  #     METHOD: GET
