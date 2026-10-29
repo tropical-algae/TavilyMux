@@ -38,8 +38,17 @@ defineEmits<{
     description="添加至少一个 Key 后，这个池才能接收搜索请求。"
   />
   <section v-else class="table-surface key-table-surface">
-    <div class="table-wrap">
+    <div class="table-wrap key-table-scroll">
       <table class="key-table">
+        <colgroup>
+          <col class="key-table__col key-table__col--name" />
+          <col class="key-table__col key-table__col--token" />
+          <col class="key-table__col key-table__col--status" />
+          <col class="key-table__col key-table__col--quota" />
+          <col class="key-table__col key-table__col--success" />
+          <col class="key-table__col key-table__col--checked" />
+          <col class="key-table__col key-table__col--actions" />
+        </colgroup>
         <thead>
           <tr>
             <th>名称</th>
@@ -48,7 +57,7 @@ defineEmits<{
             <th>额度</th>
             <th>成功率</th>
             <th>最后检测</th>
-            <th class="align-right">操作</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>

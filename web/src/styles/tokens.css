@@ -33,10 +33,10 @@
   /* Actions and semantic states */
   --action-primary: #18221e;
   --action-primary-hover: #0c1713;
-  --accent: #0f7b6c;
-  --accent-hover: #0b675b;
-  --accent-soft: #e7f3f1;
-  --accent-ink: #0b5d52;
+  --accent: #3e706b;
+  --accent-hover: #26635b;
+  --accent-soft: #e3ecea;
+  --accent-ink: #204c46;
   --warning: #9a6700;
   --warning-soft: #fbf3db;
   --warning-border: rgba(154, 103, 0, 0.12);
@@ -52,7 +52,7 @@
 
   /* Data visualization */
   --meter-track: var(--surface-muted);
-  --meter-positive: #9ed8cf;
+  --meter-positive: #9ccac3;
   --meter-warning: #e9c46a;
   --meter-danger: #ef9a9a;
   --chart-grid: #e7e9e6;

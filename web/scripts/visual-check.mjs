@@ -357,6 +357,32 @@ try {
   )
   await capture(
     browser,
+    "pool-keys-right-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "Tavily Keys" }).click()
+      await page.locator(".key-table-scroll").evaluate((element) => {
+        element.scrollLeft = element.scrollWidth
+      })
+    },
+  )
+  await capture(
+    browser,
+    "pool-keys-right-mobile",
+    { width: 390, height: 844 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "Tavily Keys" }).click()
+      await page.locator(".key-table-scroll").evaluate((element) => {
+        element.scrollLeft = element.scrollWidth
+      })
+    },
+  )
+  await capture(
+    browser,
     "pool-key-modal-desktop",
     { width: 1440, height: 1000 },
     "/pools/pool-primary",

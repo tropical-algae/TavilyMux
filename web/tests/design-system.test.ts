@@ -56,3 +56,9 @@ test("does not fall back to native blocking dialogs", () => {
 
   assert.doesNotMatch(source, /window\.(?:alert|confirm|prompt)\s*\(/)
 })
+
+test("keeps modal exit free from clipping masks", () => {
+  const styles = readFileSync(join(stylesRoot, "main.css"), "utf8")
+
+  assert.doesNotMatch(styles, /\.modal-leave-to\s+\.modal-panel\s*\{[^}]*clip-path/s)
+})

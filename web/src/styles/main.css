@@ -1792,6 +1792,11 @@ textarea:disabled {
   overflow-x: auto;
 }
 
+.key-table-scroll {
+  overscroll-behavior-x: none;
+  overscroll-behavior-inline: none;
+}
+
 table {
   width: 100%;
   min-width: 760px;
@@ -1828,45 +1833,41 @@ tbody tr:hover {
   background: var(--surface-hover);
 }
 
-.align-right {
-  text-align: right;
-}
-
 .table-surface {
   overflow: hidden;
 }
 
 .key-table {
   width: 100%;
-  min-width: 1280px;
+  min-width: 1200px;
 }
 
-.key-table th:nth-child(1) {
-  width: 150px;
+.key-table__col--name {
+  width: 120px;
 }
 
-.key-table th:nth-child(2) {
-  width: 210px;
+.key-table__col--token {
+  width: 175px;
 }
 
-.key-table th:nth-child(3) {
-  width: 130px;
+.key-table__col--status {
+  width: 115px;
 }
 
-.key-table th:nth-child(4) {
-  width: 390px;
+.key-table__col--quota {
+  width: 310px;
 }
 
-.key-table th:nth-child(5) {
-  width: 110px;
+.key-table__col--success {
+  width: 90px;
 }
 
-.key-table th:nth-child(6) {
-  width: 180px;
+.key-table__col--checked {
+  width: 160px;
 }
 
-.key-table th:nth-child(7) {
-  width: 280px;
+.key-table__col--actions {
+  width: 230px;
 }
 
 .key-name,
@@ -1898,7 +1899,7 @@ tbody tr:hover {
 
 .quota-cell {
   display: grid;
-  min-width: 350px;
+  min-width: 280px;
   gap: 7px;
 }
 
@@ -1916,7 +1917,7 @@ tbody tr:hover {
 
 .quota-meter {
   display: grid;
-  grid-template-columns: 64px 230px;
+  grid-template-columns: 60px 200px;
   align-items: center;
   gap: 8px;
 }
@@ -1965,7 +1966,7 @@ tbody tr:hover {
 
 .key-table__actions {
   flex-wrap: nowrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   white-space: nowrap;
 }
 
@@ -2618,16 +2619,22 @@ tbody tr:hover {
   clip-path: inset(0 0 14% 0 round 8px);
 }
 
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 180ms ease;
+.modal-enter-active {
+  transition: opacity var(--duration-normal) ease;
 }
 
-.modal-enter-active .modal-panel,
-.modal-leave-active .modal-panel {
+.modal-leave-active {
+  transition: opacity var(--duration-fast) ease;
+}
+
+.modal-enter-active .modal-panel {
   transition:
-    opacity 180ms ease,
-    clip-path 260ms cubic-bezier(0.16, 1, 0.3, 1);
+    opacity var(--duration-normal) ease,
+    clip-path var(--duration-reveal) var(--ease-out);
+}
+
+.modal-leave-active .modal-panel {
+  transition: opacity var(--duration-fast) ease;
 }
 
 .modal-enter-from,
@@ -2637,8 +2644,7 @@ tbody tr:hover {
   opacity: 0;
 }
 
-.modal-enter-from .modal-panel,
-.modal-leave-to .modal-panel {
+.modal-enter-from .modal-panel {
   clip-path: inset(0 0 12% 0 round 12px);
 }
 
@@ -3286,8 +3292,7 @@ tbody tr:hover {
     padding-inline: 17px;
   }
 
-  .modal-enter-from .modal-panel,
-  .modal-leave-to .modal-panel {
+  .modal-enter-from .modal-panel {
     clip-path: inset(16% 0 0 0 round 12px 12px 0 0);
   }
 }

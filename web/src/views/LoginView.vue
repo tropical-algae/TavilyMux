@@ -38,7 +38,7 @@ async function submit(): Promise<void> {
         <span>TavilyMux</span>
       </div>
       <div>
-        <h1 id="login-title">让每一次搜索，抵达正确的 Key。</h1>
+        <h1 id="login-title">让每一次搜索，<br />抵达正确的位置。</h1>
         <p>统一管理账号池、额度和故障切换。搜索请求走内存路由，管理操作留在控制面。</p>
       </div>
       <div class="login-intro__signals" aria-label="产品能力">
