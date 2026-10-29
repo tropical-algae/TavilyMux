@@ -7,9 +7,10 @@ from fastapi.responses import Response
 from loguru import logger
 
 from tavily_mux.api.control_plane import router as control_plane_router
-from tavily_mux.api.data_plane import router as data_plane_router
+from tavily_mux.api.data_plane import create_data_plane_router
 from tavily_mux.common.config import Settings, get_settings
 from tavily_mux.common.logging import configure_logging
+from tavily_mux.domain.endpoints import endpoint_specs, is_builtin_path
 from tavily_mux.services.bootstrap import ApplicationContext, bootstrap_application
 
 
@@ -37,7 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.context = None
-    app.include_router(data_plane_router)
+    app.include_router(create_data_plane_router(settings.ENDPOINTS))
     app.include_router(control_plane_router)
 
     @app.get("/livez", include_in_schema=False)
@@ -63,7 +64,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         @app.get("/{path:path}", include_in_schema=False)
         async def web_application(path: str) -> Response:
-            if path == "search" or path.startswith(("api/", "search/")):
+            request_path = f"/{path}"
+            configured_paths = {spec.path for spec in endpoint_specs(settings.ENDPOINTS)}
+            if path not in web_files and (
+                is_builtin_path(request_path)
+                or request_path in configured_paths
+                or request_path
+                in {
+                    "/api",
+                    "/assets",
+                    "/docs",
+                    "/redoc",
+                    "/openapi.json",
+                    "/livez",
+                    "/readyz",
+                    "/usage",
+                    "/org-usage",
+                }
+                or request_path.startswith(("/api/", "/assets/"))
+            ):
                 raise HTTPException(status.HTTP_404_NOT_FOUND)
             content, media_type = web_files.get(path, web_files["index.html"])
             cache_control = (

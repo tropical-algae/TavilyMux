@@ -7,7 +7,12 @@ from sqlalchemy import delete
 
 from tavily_mux.common.time import utc_now
 from tavily_mux.persistence.database import Database
-from tavily_mux.persistence.models import ProxyRequest, SystemSettings, UsageSnapshot
+from tavily_mux.persistence.models import (
+    ProxyRequest,
+    SystemSettings,
+    TaskAffinity,
+    UsageSnapshot,
+)
 
 
 class RetentionWorker:
@@ -45,6 +50,7 @@ class RetentionWorker:
                 session.execute(
                     delete(UsageSnapshot).where(UsageSnapshot.captured_at < boundary)
                 )
+                session.execute(delete(TaskAffinity).where(TaskAffinity.created_at < boundary))
                 session.commit()
         except Exception:
             logger.exception("Unable to clean retained request data")

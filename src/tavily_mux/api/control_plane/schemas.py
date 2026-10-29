@@ -272,6 +272,9 @@ class ProxyLogResponse(BaseModel):
     status_code: int | None
     latency_ms: float | None
     attempt_count: int
+    method: str
+    endpoint: str
+    path: str
     credits: int | None
     error_type: str | None
     external_request_id: str | None

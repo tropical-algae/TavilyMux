@@ -108,6 +108,7 @@ class TavilyKey(TimestampMixin, Base):
     paygo_usage: Mapped[int | None] = mapped_column(Integer)
     paygo_limit: Mapped[int | None] = mapped_column(Integer)
     cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rate_limit_cooldowns: Mapped[dict[str, str] | None] = mapped_column(JSON)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -136,6 +137,22 @@ class UsageSnapshot(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
+class TaskAffinity(Base):
+    __tablename__ = "task_affinities"
+    __table_args__ = (Index("ix_task_affinities_key", "key_id"),)
+
+    pool_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("pools.id", ondelete="CASCADE"), primary_key=True
+    )
+    resource_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    key_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("tavily_keys.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
 class ProxyRequest(Base):
     __tablename__ = "proxy_requests"
     __table_args__ = (
@@ -157,6 +174,9 @@ class ProxyRequest(Base):
     status_code: Mapped[int | None] = mapped_column(Integer)
     latency_ms: Mapped[float | None] = mapped_column(Float)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    method: Mapped[str] = mapped_column(String(10), nullable=False, default="POST")
+    endpoint: Mapped[str] = mapped_column(String(100), nullable=False, default="search")
+    path: Mapped[str] = mapped_column(String(500), nullable=False, default="/search")
     credits: Mapped[int | None] = mapped_column(Integer)
     error_type: Mapped[str | None] = mapped_column(String(100))
     external_request_id: Mapped[str | None] = mapped_column(String(200))

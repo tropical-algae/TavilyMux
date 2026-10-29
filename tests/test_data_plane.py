@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from tavily_mux.app import create_app
 from tavily_mux.common.config import Settings
+from tavily_mux.domain.endpoints import EndpointSettings
 from tavily_mux.services.bootstrap import ApplicationContext
 
 
@@ -134,6 +135,234 @@ async def test_search_is_a_schema_free_transparent_proxy(
     assert logs.json()["total"] == 1
     assert logs.json()["items"][0]["status_code"] == 200
     assert logs.json()["items"][0]["attempt_count"] == 1
+    assert logs.json()["items"][0]["method"] == "POST"
+    assert logs.json()["items"][0]["endpoint"] == "search"
+    assert logs.json()["items"][0]["path"] == "/search"
+    assert logs.json()["items"][0]["credits"] == 1
+
+
+@pytest.mark.parametrize("path", ["/extract", "/crawl", "/map", "/feedback"])
+async def test_builtin_post_endpoints_share_the_transparent_proxy(
+    app_client: tuple[FastAPI, httpx2.AsyncClient],
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+) -> None:
+    app, client = app_client
+    _, relay_key = await provision_pool(client)
+    calls: list[dict[str, Any]] = []
+
+    async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
+        calls.append(kwargs)
+        return response(200, b'{"ok":true}', **{"content-type": "application/json"})
+
+    replace_send(monkeypatch, app.state.context, fake_send)
+    result = await client.post(
+        f"{path}?future=value",
+        headers={"Authorization": f"Bearer {relay_key}"},
+        content=b'{"future":true}',
+    )
+
+    assert result.status_code == 200
+    assert result.content == b'{"ok":true}'
+    assert calls[0]["method"] == "POST"
+    assert calls[0]["path"] == path
+    assert calls[0]["query"] == "future=value"
+    assert calls[0]["content"] == b'{"future":true}'
+
+
+async def test_research_status_uses_the_key_that_created_the_task(
+    app_client: tuple[FastAPI, httpx2.AsyncClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = app_client
+    _, relay_key = await provision_pool(client, keys=2)
+    calls: list[tuple[str, str, str]] = []
+
+    async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
+        authorization = httpx2.Headers(kwargs["headers"])["authorization"]
+        calls.append((kwargs["method"], kwargs["path"], authorization))
+        if kwargs["method"] == "POST":
+            return response(
+                202,
+                b'{"request_id":"research-task-1","status":"pending"}',
+                **{"content-type": "application/json"},
+            )
+        return response(
+            200,
+            b'{"request_id":"research-task-1","status":"completed"}',
+            **{"content-type": "application/json"},
+        )
+
+    context: ApplicationContext = app.state.context
+    replace_send(monkeypatch, context, fake_send)
+    created = await client.post(
+        "/research",
+        headers={"Authorization": f"Bearer {relay_key}"},
+        json={"input": "investigate"},
+    )
+    context.runtime.load()
+    checked = await client.get(
+        "/research/research-task-1",
+        headers={"Authorization": f"Bearer {relay_key}"},
+    )
+
+    assert created.status_code == 202
+    assert checked.status_code == 200
+    assert [(method, path) for method, path, _ in calls] == [
+        ("POST", "/research"),
+        ("GET", "/research/research-task-1"),
+    ]
+    assert calls[0][2] == calls[1][2]
+
+    await context.events.flush()
+    logs = (await client.get("/api/v1/logs")).json()["items"]
+    assert {(item["method"], item["endpoint"]) for item in logs} == {
+        ("POST", "research"),
+        ("GET", "research"),
+    }
+    assert sum(item["credits"] for item in logs) == 4
+
+
+async def test_research_does_not_retry_an_ambiguous_read_failure(
+    app_client: tuple[FastAPI, httpx2.AsyncClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = app_client
+    _, relay_key = await provision_pool(client, keys=2)
+    calls = 0
+
+    async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
+        nonlocal calls
+        calls += 1
+        raise httpx2.ReadError(
+            "response lost",
+            request=httpx2.Request("POST", "https://upstream.test/research"),
+        )
+
+    replace_send(monkeypatch, app.state.context, fake_send)
+    result = await client.post(
+        "/research",
+        headers={"Authorization": f"Bearer {relay_key}"},
+        json={"input": "do not duplicate"},
+    )
+
+    assert result.status_code == 502
+    assert calls == 1
+
+
+async def test_streaming_research_preserves_response_and_task_affinity(
+    app_client: tuple[FastAPI, httpx2.AsyncClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = app_client
+    _, relay_key = await provision_pool(client, keys=2)
+    authorizations: list[str] = []
+
+    async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
+        authorizations.append(httpx2.Headers(kwargs["headers"])["authorization"])
+        if kwargs["method"] == "POST":
+            return response(
+                200,
+                b'event: metadata\ndata: {"request_id":"stream-task-1"}\n\n',
+                **{"content-type": "text/event-stream"},
+            )
+        return response(200, b'{"request_id":"stream-task-1","status":"completed"}')
+
+    replace_send(monkeypatch, app.state.context, fake_send)
+    streamed = await client.post(
+        "/research",
+        headers={"Authorization": f"Bearer {relay_key}"},
+        json={"input": "stream", "stream": True},
+    )
+    checked = await client.get(
+        "/research/stream-task-1",
+        headers={"Authorization": f"Bearer {relay_key}"},
+    )
+
+    assert streamed.content == (b'event: metadata\ndata: {"request_id":"stream-task-1"}\n\n')
+    assert streamed.headers["content-type"].startswith("text/event-stream")
+    assert checked.status_code == 200
+    assert authorizations[0] == authorizations[1]
+
+
+async def test_feedback_uses_the_key_that_served_the_search(
+    app_client: tuple[FastAPI, httpx2.AsyncClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, client = app_client
+    _, relay_key = await provision_pool(client, keys=2)
+    authorizations: list[str] = []
+
+    async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
+        authorizations.append(httpx2.Headers(kwargs["headers"])["authorization"])
+        if kwargs["path"] == "/search":
+            return response(
+                200,
+                b'{"results":[],"request_id":"search-request-1"}',
+            )
+        return response(200, b'{"status":"accepted"}')
+
+    replace_send(monkeypatch, app.state.context, fake_send)
+    searched = await client.post(
+        "/search",
+        headers={"Authorization": f"Bearer {relay_key}"},
+        json={"query": "remember this key"},
+    )
+    feedback = await client.post(
+        "/feedback",
+        headers={"Authorization": f"Bearer {relay_key}"},
+        json={"request_id": "search-request-1", "score": 1},
+    )
+
+    assert searched.status_code == 200
+    assert feedback.status_code == 200
+    assert authorizations[0] == authorizations[1]
+
+
+async def test_custom_and_disabled_endpoints_are_applied_at_app_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        DATA_DIR=tmp_path,
+        ADMIN_SECRET="test-admin-secret",
+        MASTER_KEY=Fernet.generate_key().decode(),
+        ENDPOINTS=EndpointSettings(
+            disabled={"map"},
+            custom=[{"path": "/future-get", "method": "GET"}],
+        ),
+    )
+    app = create_app(settings)
+    async with (
+        app.router.lifespan_context(app),
+        httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client,
+    ):
+        _, relay_key = await provision_pool(client)
+        calls: list[dict[str, Any]] = []
+
+        async def fake_send(*args: Any, **kwargs: Any) -> httpx2.Response:
+            calls.append(kwargs)
+            return response(200, b'{"future":true}')
+
+        replace_send(monkeypatch, app.state.context, fake_send)
+        custom = await client.get(
+            "/future-get?value=1",
+            headers={"Authorization": f"Bearer {relay_key}"},
+        )
+        disabled = await client.post(
+            "/map",
+            headers={"Authorization": f"Bearer {relay_key}"},
+            json={"url": "https://example.com"},
+        )
+
+    assert custom.status_code == 200
+    assert calls[0]["method"] == "GET"
+    assert calls[0]["path"] == "/future-get"
+    assert disabled.status_code == 404
+    assert disabled.headers["x-tavily-mux-error"] == "endpoint_disabled"
 
 
 async def test_key_specific_error_fails_over_and_logs_attempts(

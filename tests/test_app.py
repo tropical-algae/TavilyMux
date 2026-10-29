@@ -61,9 +61,11 @@ async def test_serves_built_web_application_with_spa_fallback(tmp_path: Path) ->
         ) as test_client,
     ):
         page = await test_client.get("/pools/example")
+        pool_index = await test_client.get("/pools")
         asset = await test_client.get("/assets/app.js")
         missing_api = await test_client.get("/api/v1/missing")
 
     assert page.text == "<main>control deck</main>"
+    assert pool_index.text == "<main>control deck</main>"
     assert asset.text == "console.log('ready')"
     assert missing_api.status_code == 404

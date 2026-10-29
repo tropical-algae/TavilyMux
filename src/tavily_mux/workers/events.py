@@ -17,6 +17,7 @@ class KeyStateEvent:
     status: str
     last_used_at: datetime | None
     cooldown_until: datetime | None
+    rate_limit_cooldowns: dict[str, datetime]
     request_count: int
     success_count: int
     failure_count: int
@@ -28,6 +29,9 @@ class ProxyRequestEvent:
     request_id: str
     pool_id: str
     relay_id: str
+    method: str
+    endpoint: str
+    path: str
     created_at: datetime
     completed_at: datetime
     status_code: int | None
@@ -35,5 +39,6 @@ class ProxyRequestEvent:
     final_key_id: str | None
     error_type: str | None
     external_request_id: str | None
+    credits: int | None
     attempts: tuple[ProxyAttemptEvent, ...]
     key_states: tuple[KeyStateEvent, ...] = field(default_factory=tuple)

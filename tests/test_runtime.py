@@ -7,6 +7,7 @@ from cryptography.fernet import Fernet
 
 from tavily_mux.common.security import SecretManager, generate_relay_key
 from tavily_mux.common.time import utc_now
+from tavily_mux.domain.endpoints import RateLimitBucket
 from tavily_mux.domain.enums import KeyStatus, RoutingStrategy
 from tavily_mux.persistence.database import Database
 from tavily_mux.persistence.migrate import upgrade_database
@@ -174,6 +175,39 @@ async def test_key_error_states_and_cooldown(runtime: tuple[RuntimeRegistry, str
     assert key.status == KeyStatus.INVALID.value
     await registry.mark_key_response(pool, key, 433)
     assert key.status == KeyStatus.EXHAUSTED.value
+
+
+async def test_rate_limit_cooldowns_are_isolated_by_endpoint_bucket(
+    runtime: tuple[RuntimeRegistry, str],
+) -> None:
+    registry, relay_token = runtime
+    pool = registry.authenticate_relay(relay_token)
+    assert pool is not None
+    key = pool.keys["key-high"]
+
+    await registry.mark_key_response(
+        pool,
+        key,
+        429,
+        rate_limit_bucket=RateLimitBucket.RESEARCH,
+        retry_after_seconds=60,
+    )
+
+    default_request = await registry.select_key(
+        pool,
+        {"key-low"},
+        rate_limit_bucket=RateLimitBucket.DEFAULT,
+    )
+    assert default_request is key
+    await registry.finish_key(pool, key, success=False)
+    assert (
+        await registry.select_key(
+            pool,
+            {"key-low"},
+            rate_limit_bucket=RateLimitBucket.RESEARCH,
+        )
+        is None
+    )
 
 
 async def test_pool_limits_and_random_strategy(

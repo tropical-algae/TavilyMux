@@ -6,6 +6,18 @@ import httpx2
 from tavily_mux.runtime.models import ConnectionProfile
 
 
+def is_unambiguous_transport_error(error: httpx2.HTTPError) -> bool:
+    return isinstance(
+        error,
+        (
+            httpx2.ConnectError,
+            httpx2.ConnectTimeout,
+            httpx2.PoolTimeout,
+            httpx2.ProxyError,
+        ),
+    )
+
+
 class TavilyClientManager:
     def __init__(
         self,
@@ -31,6 +43,7 @@ class TavilyClientManager:
         content: bytes | None = None,
         query: str = "",
         stream: bool = False,
+        retry_ambiguous_transport: bool = True,
     ) -> httpx2.Response:
         url = f"{profile.base_url.rstrip('/')}/{path.lstrip('/')}"
         if query:
@@ -39,8 +52,10 @@ class TavilyClientManager:
         request = client.build_request(method, url, headers=headers, content=content)
         try:
             return await client.send(request, stream=stream)
-        except httpx2.TransportError:
+        except httpx2.TransportError as error:
             if not profile.allow_direct_fallback or not self._has_proxy(profile):
+                raise
+            if not retry_ambiguous_transport and not is_unambiguous_transport_error(error):
                 raise
             direct_client = await self._get_client(profile, direct=True)
             direct_request = direct_client.build_request(

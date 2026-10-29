@@ -89,6 +89,10 @@ class EventWriter:
                         status_code=event.status_code,
                         latency_ms=event.latency_ms,
                         attempt_count=len(event.attempts),
+                        method=event.method,
+                        endpoint=event.endpoint,
+                        path=event.path,
+                        credits=event.credits,
                         error_type=event.error_type,
                         external_request_id=event.external_request_id,
                     )
@@ -117,6 +121,10 @@ class EventWriter:
                         key.status = state.status
                         key.last_used_at = state.last_used_at
                         key.cooldown_until = state.cooldown_until
+                        key.rate_limit_cooldowns = {
+                            bucket: cooldown.isoformat()
+                            for bucket, cooldown in state.rate_limit_cooldowns.items()
+                        }
                         key.request_count = state.request_count
                         key.success_count = state.success_count
                         key.failure_count = state.failure_count

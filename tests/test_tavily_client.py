@@ -84,7 +84,51 @@ async def test_client_manager_can_fallback_to_direct_connection(
         method="GET",
         path="usage",
         headers=(),
+        retry_ambiguous_transport=False,
     )
 
     assert result.text == "direct"
     await manager.close()
+
+
+async def test_client_manager_does_not_repeat_ambiguous_requests_directly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    direct_calls = 0
+
+    async def proxy_handler(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadError("response lost", request=request)
+
+    async def direct_handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal direct_calls
+        direct_calls += 1
+        return httpx2.Response(200, text="duplicated")
+
+    proxy_client = httpx2.AsyncClient(transport=httpx2.MockTransport(proxy_handler))
+    direct_client = httpx2.AsyncClient(transport=httpx2.MockTransport(direct_handler))
+    manager = TavilyClientManager(max_connections=10, max_keepalive_connections=5)
+
+    def build_client(profile: ConnectionProfile, *, direct: bool) -> httpx2.AsyncClient:
+        return direct_client if direct else proxy_client
+
+    monkeypatch.setattr(manager, "_build_client", build_client)
+    profile = ConnectionProfile(
+        base_url="https://api.example.test",
+        http_proxy="http://proxy.example.test:7890",
+        https_proxy=None,
+        allow_direct_fallback=True,
+        timeout_seconds=10,
+    )
+
+    with pytest.raises(httpx2.ReadError):
+        await manager.send(
+            profile,
+            method="POST",
+            path="research",
+            headers=(),
+            retry_ambiguous_transport=False,
+        )
+
+    assert direct_calls == 0
+    await manager.close()
+    await direct_client.aclose()

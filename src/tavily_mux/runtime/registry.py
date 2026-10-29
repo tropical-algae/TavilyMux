@@ -2,17 +2,25 @@ import asyncio
 import hmac
 import random
 import time
-from collections import deque
-from datetime import timedelta
+from collections import OrderedDict, deque
+from datetime import datetime, timedelta
 
+from loguru import logger
 from sqlalchemy import select
 
 from tavily_mux.common.security import SecretManager, parse_relay_key
 from tavily_mux.common.time import utc_now
+from tavily_mux.domain.endpoints import RateLimitBucket
 from tavily_mux.domain.enums import KeyStatus, RoutingStrategy
 from tavily_mux.domain.quota import calculate_quota
 from tavily_mux.persistence.database import Database
-from tavily_mux.persistence.models import Pool, RelayKey, SystemSettings, TavilyKey
+from tavily_mux.persistence.models import (
+    Pool,
+    RelayKey,
+    SystemSettings,
+    TaskAffinity,
+    TavilyKey,
+)
 from tavily_mux.runtime.models import (
     ConnectionProfile,
     KeyRuntime,
@@ -27,6 +35,7 @@ ROUTABLE_STATUSES = {
     KeyStatus.LOW_QUOTA.value,
     KeyStatus.CHECK_FAILED.value,
 }
+MAX_EPHEMERAL_AFFINITIES = 50_000
 
 
 class RuntimeRegistry:
@@ -40,6 +49,8 @@ class RuntimeRegistry:
         self.database = database
         self.secrets = secrets
         self._snapshot = RuntimeSnapshot(pools={}, relay_keys={}, generation=0)
+        self._task_affinities: dict[tuple[str, str], str] = {}
+        self._request_affinities: OrderedDict[tuple[str, str], str] = OrderedDict()
         self.global_slots = asyncio.Semaphore(global_max_concurrency)
 
     @property
@@ -55,6 +66,7 @@ class RuntimeRegistry:
             pool_rows = session.scalars(select(Pool)).all()
             relay_rows = session.scalars(select(RelayKey)).all()
             key_rows = session.scalars(select(TavilyKey)).all()
+            affinity_rows = session.scalars(select(TaskAffinity)).all()
 
         global_http_proxy = self._decrypt_optional(settings.http_proxy_encrypted)
         global_https_proxy = self._decrypt_optional(settings.https_proxy_encrypted)
@@ -92,7 +104,13 @@ class RuntimeRegistry:
                 failure_count=key_row.failure_count,
                 last_error=key_row.last_error,
                 inflight=old_key.inflight if old_key else 0,
+                inflight_credits=old_key.inflight_credits if old_key else 0,
                 local_consumed=old_key.local_consumed if old_key else 0,
+                rate_limit_cooldowns=(
+                    old_key.rate_limit_cooldowns.copy()
+                    if old_key
+                    else self._deserialize_cooldowns(key_row.rate_limit_cooldowns)
+                ),
             )
 
         pools: dict[str, PoolRuntime] = {}
@@ -148,6 +166,9 @@ class RuntimeRegistry:
             relay_keys=relay_keys,
             generation=previous.generation + 1,
         )
+        self._task_affinities = {
+            (row.pool_id, row.resource_id): row.key_id for row in affinity_rows
+        }
         return self._snapshot
 
     def authenticate_relay(self, token: str) -> PoolRuntime | None:
@@ -165,7 +186,15 @@ class RuntimeRegistry:
         pool = self._snapshot.pools.get(relay.pool_id)
         return pool if pool and pool.enabled else None
 
-    async def select_key(self, pool: PoolRuntime, tried: set[str]) -> KeyRuntime | None:
+    async def select_key(
+        self,
+        pool: PoolRuntime,
+        tried: set[str],
+        *,
+        estimated_credits: int = 1,
+        rate_limit_bucket: RateLimitBucket = RateLimitBucket.DEFAULT,
+        preferred_key_id: str | None = None,
+    ) -> KeyRuntime | None:
         async with pool.lock:
             self._trim_rpm_window(pool)
             if (
@@ -179,17 +208,23 @@ class RuntimeRegistry:
             now = utc_now()
             candidates: list[tuple[KeyRuntime, int | None]] = []
             for key in pool.keys.values():
-                if key.id in tried or not key.enabled:
+                if (
+                    key.id in tried
+                    or not key.enabled
+                    or (preferred_key_id is not None and key.id != preferred_key_id)
+                ):
                     continue
-                if key.status == KeyStatus.RATE_LIMITED.value:
-                    if key.cooldown_until is None or key.cooldown_until > now:
-                        continue
-                    key.status = KeyStatus.AVAILABLE.value
-                    key.cooldown_until = None
+                self._refresh_rate_limit_state(key, now)
+                bucket_cooldown = key.rate_limit_cooldowns.get(rate_limit_bucket.value)
+                if bucket_cooldown is not None and bucket_cooldown > now:
+                    continue
                 if key.status not in ROUTABLE_STATUSES:
-                    continue
+                    if key.status != KeyStatus.RATE_LIMITED.value:
+                        continue
+                    if not key.rate_limit_cooldowns:
+                        key.status = KeyStatus.AVAILABLE.value
                 remaining = key.remaining
-                if remaining == 0:
+                if remaining is not None and remaining < estimated_credits:
                     continue
                 candidates.append((key, remaining))
 
@@ -219,6 +254,7 @@ class RuntimeRegistry:
                 selected = random.choice(best)
 
             selected.inflight += 1
+            selected.inflight_credits += estimated_credits
             selected.request_count += 1
             selected.last_used_at = now
             pool.active_requests += 1
@@ -231,13 +267,15 @@ class RuntimeRegistry:
         key: KeyRuntime,
         *,
         success: bool,
+        consumed_credits: int = 1,
         error: str | None = None,
     ) -> None:
         async with pool.lock:
             key.inflight = max(key.inflight - 1, 0)
+            key.inflight_credits = max(key.inflight_credits - consumed_credits, 0)
             pool.active_requests = max(pool.active_requests - 1, 0)
             if success:
-                key.local_consumed += 1
+                key.local_consumed += consumed_credits
                 key.success_count += 1
                 key.last_error = None
             else:
@@ -249,18 +287,63 @@ class RuntimeRegistry:
         pool: PoolRuntime,
         key: KeyRuntime,
         status_code: int,
+        rate_limit_bucket: RateLimitBucket = RateLimitBucket.DEFAULT,
         retry_after_seconds: int | None = None,
     ) -> None:
         async with pool.lock:
             if status_code == 401:
                 key.status = KeyStatus.INVALID.value
             elif status_code == 429:
-                key.status = KeyStatus.RATE_LIMITED.value
-                key.cooldown_until = utc_now() + timedelta(
+                if rate_limit_bucket is RateLimitBucket.DEFAULT:
+                    key.status = KeyStatus.RATE_LIMITED.value
+                cooldown_until = utc_now() + timedelta(
                     seconds=max(retry_after_seconds or 60, 1)
                 )
+                key.rate_limit_cooldowns[rate_limit_bucket.value] = cooldown_until
+                key.cooldown_until = max(key.rate_limit_cooldowns.values())
             elif status_code in {432, 433}:
                 key.status = KeyStatus.EXHAUSTED.value
+
+    def affinity_key_id(self, pool_id: str, resource_id: str) -> str | None:
+        affinity = (pool_id, resource_id)
+        ephemeral = self._request_affinities.get(affinity)
+        if ephemeral is not None:
+            self._request_affinities.move_to_end(affinity)
+            return ephemeral
+        return self._task_affinities.get(affinity)
+
+    def remember_affinity(
+        self,
+        pool_id: str,
+        resource_id: str,
+        key_id: str,
+        *,
+        persist: bool = True,
+    ) -> None:
+        affinity = (pool_id, resource_id)
+        if not persist:
+            self._request_affinities[affinity] = key_id
+            self._request_affinities.move_to_end(affinity)
+            while len(self._request_affinities) > MAX_EPHEMERAL_AFFINITIES:
+                self._request_affinities.popitem(last=False)
+            return
+        self._task_affinities[affinity] = key_id
+        try:
+            with self.database.session() as session:
+                row = session.get(TaskAffinity, affinity)
+                if row is None:
+                    row = TaskAffinity(
+                        pool_id=pool_id,
+                        resource_id=resource_id,
+                        key_id=key_id,
+                    )
+                    session.add(row)
+                else:
+                    row.key_id = key_id
+                    row.created_at = utc_now()
+                session.commit()
+        except Exception:
+            logger.exception("Unable to persist task-to-key affinity")
 
     def _decrypt_optional(self, value: str | None) -> str | None:
         return self.secrets.decrypt(value) if value else None
@@ -277,3 +360,40 @@ class RuntimeRegistry:
         boundary = time.monotonic() - 60
         while pool.recent_requests and pool.recent_requests[0] < boundary:
             pool.recent_requests.popleft()
+
+    @staticmethod
+    def _refresh_rate_limit_state(key: KeyRuntime, now) -> None:
+        if (
+            key.status == KeyStatus.RATE_LIMITED.value
+            and key.cooldown_until is not None
+            and key.cooldown_until <= now
+        ):
+            key.rate_limit_cooldowns.clear()
+        expired = [
+            bucket
+            for bucket, cooldown_until in key.rate_limit_cooldowns.items()
+            if cooldown_until <= now
+        ]
+        for bucket in expired:
+            del key.rate_limit_cooldowns[bucket]
+        if key.rate_limit_cooldowns:
+            key.cooldown_until = max(key.rate_limit_cooldowns.values())
+        if (
+            key.status == KeyStatus.RATE_LIMITED.value
+            and RateLimitBucket.DEFAULT.value not in key.rate_limit_cooldowns
+        ):
+            key.status = KeyStatus.AVAILABLE.value
+        if not key.rate_limit_cooldowns:
+            key.cooldown_until = None
+
+    @staticmethod
+    def _deserialize_cooldowns(value: dict[str, str] | None) -> dict[str, datetime]:
+        if not value:
+            return {}
+        cooldowns: dict[str, datetime] = {}
+        for bucket, serialized in value.items():
+            try:
+                cooldowns[bucket] = datetime.fromisoformat(serialized)
+            except (TypeError, ValueError):
+                logger.warning("Ignoring invalid persisted rate-limit cooldown")
+        return cooldowns

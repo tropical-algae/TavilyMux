@@ -46,13 +46,18 @@ class KeyRuntime:
     failure_count: int
     last_error: str | None
     inflight: int = 0
+    inflight_credits: int = 0
     local_consumed: int = 0
+    rate_limit_cooldowns: dict[str, datetime] = field(default_factory=dict)
 
     @property
     def remaining(self) -> int | None:
         if self.synced_remaining is None:
             return None
-        return max(self.synced_remaining - self.local_consumed - self.inflight, 0)
+        return max(
+            self.synced_remaining - self.local_consumed - self.inflight_credits,
+            0,
+        )
 
 
 @dataclass(slots=True)
