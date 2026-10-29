@@ -45,7 +45,7 @@ The backend listens on `http://127.0.0.1:8080` by default. If `TAVILY_MUX_ADMIN_
 npm --prefix web run dev
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api`, `/search`, `/livez`, and `/readyz` to the local backend.
+Open `http://localhost:5173`. Vite proxies `/api`, the built-in Tavily endpoints, `/livez`, and `/readyz` to the local backend. Test configured custom endpoints directly through `http://localhost:8080`.
 
 ## Test the Production Frontend Locally
 

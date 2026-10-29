@@ -45,7 +45,7 @@ uv run poe run
 npm --prefix web run dev
 ```
 
-访问 `http://localhost:5173`。Vite 会将 `/api`、`/search`、`/livez` 和 `/readyz` 转发到本地后端
+访问 `http://localhost:5173`。Vite 会将 `/api`、内置 Tavily 接口、`/livez` 和 `/readyz` 转发到本地后端。配置的自定义接口请直接通过 `http://localhost:8080` 调试
 
 ## 生产前端联调
 
