@@ -10,7 +10,7 @@ services:
       TAVILY_MUX_COOKIE_SECURE: ${TAVILY_MUX_COOKIE_SECURE:-false}
       TAVILY_MUX_LOG_FORMAT: ${TAVILY_MUX_LOG_FORMAT:-json}
     volumes:
-      - tavily-mux-data:/data
+      - ./data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -33,6 +33,3 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
     stop_grace_period: 10s
-
-volumes:
-  tavily-mux-data:
