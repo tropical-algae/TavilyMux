@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronRight } from "lucide-vue-next"
 
+import { useI18n } from "../i18n"
 import type { ProxyLog } from "../types/api"
 import { formatDate, formatLatency } from "../utils/format"
+
+const { t } = useI18n()
 
 defineProps<{
   logs: ProxyLog[]
@@ -34,19 +37,23 @@ defineEmits<{
         >
           {{ log.status_code ?? "ERR" }}
         </span>
-        <span class="log-entry__attempts">{{ log.attempt_count }} 次尝试</span>
+        <span class="log-entry__attempts">{{
+          t("requestLog.attemptCount", { count: log.attempt_count })
+        }}</span>
         <strong>{{ formatLatency(log.latency_ms) }}</strong>
       </button>
       <div v-if="expanded.has(log.id)" class="attempt-trace">
         <div class="attempt-trace__meta">
           <span
-            >接口：<code>{{ log.endpoint }}</code></span
+            >{{ t("requestLog.endpoint") }}<code>{{ log.endpoint }}</code></span
           >
           <span
-            >最终 Key：<code>{{ log.final_key_id || "未选择" }}</code></span
+            >{{ t("requestLog.finalKey")
+            }}<code>{{ log.final_key_id || t("common.notSelected") }}</code></span
           >
           <span
-            >外部请求 ID：<code>{{ log.external_request_id || "未提供" }}</code></span
+            >{{ t("requestLog.externalId")
+            }}<code>{{ log.external_request_id || t("common.notProvided") }}</code></span
           >
         </div>
         <ol>
@@ -60,12 +67,16 @@ defineEmits<{
             ></span>
             <div>
               <strong>
-                第 {{ attempt.attempt_no }} 次 ·
-                {{ attempt.status_code ?? "网络错误" }}
+                {{
+                  t("requestLog.attempt", {
+                    count: attempt.attempt_no,
+                    status: attempt.status_code ?? t("requestLog.networkError"),
+                  })
+                }}
               </strong>
-              <code>{{ attempt.key_id || "Key 已删除" }}</code>
+              <code>{{ attempt.key_id || t("requestLog.keyDeleted") }}</code>
             </div>
-            <span>{{ attempt.error_type || "完成" }}</span>
+            <span>{{ attempt.error_type || t("requestLog.completed") }}</span>
             <time>{{ formatLatency(attempt.latency_ms) }}</time>
           </li>
         </ol>

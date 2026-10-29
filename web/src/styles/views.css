@@ -279,9 +279,14 @@
 }
 
 .login-panel {
-  width: min(100%, 540px);
+  width: 100%;
+  align-items: center;
   padding: clamp(40px, 7vw, 88px);
   background: var(--surface);
+}
+
+.login-panel > * {
+  width: min(100%, 420px);
 }
 
 .login-panel__heading {

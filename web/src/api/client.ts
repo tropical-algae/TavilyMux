@@ -1,5 +1,7 @@
 import axios, { AxiosError } from "axios"
 
+import { t } from "../i18n"
+
 export const api = axios.create({
   baseURL: "/api/v1",
   timeout: 30_000,
@@ -39,11 +41,11 @@ api.interceptors.response.use(
   },
 )
 
-export function errorMessage(error: unknown, fallback = "操作失败，请稍后重试"): string {
+export function errorMessage(error: unknown, fallback = t("error.generic")): string {
   if (!(error instanceof AxiosError)) return fallback
   const detail = error.response?.data?.detail
   if (typeof detail === "string") return detail
   if (detail && typeof detail.error === "string") return detail.error
-  if (error.code === "ECONNABORTED") return "请求超时，请检查连接设置后重试"
+  if (error.code === "ECONNABORTED") return t("error.timeout")
   return fallback
 }

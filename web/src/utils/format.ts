@@ -1,18 +1,19 @@
-const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-})
+import { currentLocale, t } from "../i18n/index.ts"
 
 export function formatDate(value: string | null): string {
-  return value ? dateFormatter.format(new Date(value)) : "尚无记录"
+  if (!value) return t("common.noRecord")
+  return new Intl.DateTimeFormat(currentLocale(), {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(value))
 }
 
 export function formatNumber(value: number | null): string {
-  return value === null ? "—" : new Intl.NumberFormat("zh-CN").format(value)
+  return value === null ? "—" : new Intl.NumberFormat(currentLocale()).format(value)
 }
 
 export function formatLatency(value: number | null): string {

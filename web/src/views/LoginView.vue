@@ -4,10 +4,13 @@ import { ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
 import { errorMessage } from "../api/client"
+import BrandLogo from "../components/BrandLogo.vue"
 import UiButton from "../components/UiButton.vue"
+import { useI18n } from "../i18n"
 import { useAuthStore } from "../stores/auth"
 
 const auth = useAuthStore()
+const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const secret = ref("")
@@ -23,7 +26,7 @@ async function submit(): Promise<void> {
     const target = typeof route.query.redirect === "string" ? route.query.redirect : "/"
     await router.replace(target)
   } catch (cause) {
-    error.value = errorMessage(cause, "管理密钥不正确，请检查后重试")
+    error.value = errorMessage(cause, t("login.error"))
   } finally {
     loading.value = false
   }
@@ -34,54 +37,54 @@ async function submit(): Promise<void> {
   <main class="login-page">
     <section class="login-intro" aria-labelledby="login-title">
       <div class="login-brand" aria-label="TavilyMux">
-        <img class="brand__logo" src="/tavily-mux.svg" alt="" width="34" height="34" />
+        <BrandLogo class="brand__logo" />
         <span>TavilyMux</span>
       </div>
       <div>
-        <h1 id="login-title">让每一次搜索，<br />抵达正确的位置。</h1>
-        <p>统一管理账号池、额度和故障切换。搜索请求走内存路由，管理操作留在控制面。</p>
+        <h1 id="login-title" v-html="t('login.titleHtml')"></h1>
+        <p>{{ t("login.lead") }}</p>
       </div>
-      <div class="login-intro__signals" aria-label="产品能力">
-        <span>透明转发</span>
-        <span>自动切换</span>
-        <span>额度观测</span>
+      <div class="login-intro__signals" :aria-label="t('login.features')">
+        <span>{{ t("login.featureRelay") }}</span>
+        <span>{{ t("login.featureFailover") }}</span>
+        <span>{{ t("login.featureQuota") }}</span>
       </div>
     </section>
 
-    <section class="login-panel" aria-label="管理员登录">
+    <section class="login-panel" :aria-label="t('login.aria')">
       <div class="login-panel__heading">
         <LockKeyhole :size="22" aria-hidden="true" />
         <div>
-          <h2>进入控制台</h2>
-          <p>请输入部署时配置或首次启动生成的管理密钥。</p>
+          <h2>{{ t("login.signIn") }}</h2>
+          <p>{{ t("login.subtitle") }}</p>
         </div>
       </div>
 
       <form @submit.prevent="submit">
         <label class="field">
-          <span>管理密钥</span>
+          <span>{{ t("login.key") }}</span>
           <input
             v-model="secret"
             name="secret"
             type="password"
             autocomplete="current-password"
-            placeholder="输入管理密钥"
+            :placeholder="t('login.keyPlaceholder')"
             required
             autofocus
           />
         </label>
         <label class="check-field">
           <input v-model="remember" type="checkbox" />
-          <span>在这台设备上保持登录</span>
+          <span>{{ t("login.keepSignedIn") }}</span>
         </label>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <UiButton variant="primary" block type="submit" :disabled="loading || !secret">
-          <span>{{ loading ? "正在验证…" : "进入控制台" }}</span>
+          <span>{{ loading ? t("login.signingIn") : t("login.signIn") }}</span>
           <ArrowRight v-if="!loading" :size="18" />
         </UiButton>
       </form>
 
-      <p class="login-panel__note">管理密钥仅用于本服务控制台，不会发送给 Tavily。</p>
+      <p class="login-panel__note">{{ t("login.keyHint") }}</p>
     </section>
   </main>
 </template>

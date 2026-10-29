@@ -24,6 +24,7 @@ import RequestLogList from "../components/RequestLogList.vue"
 import StatusBadge from "../components/StatusBadge.vue"
 import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
+import { useI18n } from "../i18n"
 import { useToastStore } from "../stores/toasts"
 import type {
   CreatedRelayKey,
@@ -37,6 +38,7 @@ import type {
 type Tab = "overview" | "keys" | "logs" | "access" | "settings"
 
 const route = useRoute()
+const { t } = useI18n()
 const router = useRouter()
 const poolId = computed(() => String(route.params.id))
 const pool = ref<Pool | null>(null)
@@ -83,29 +85,29 @@ const destructiveCopy = computed(() => {
   if (!target) return null
   if (target.kind === "key") {
     return {
-      title: "删除 Tavily Key",
-      description: `确认删除“${target.item.name}”吗？`,
-      warningTitle: "此操作无法撤销",
-      warningDescription: "该 Key 将立即退出路由候选，相关历史请求记录仍会保留。",
-      confirmLabel: "确认删除 Key",
+      title: t("pool.detail.deleteKey"),
+      description: t("pool.detail.confirmDeleteKey", { name: target.item.name }),
+      warningTitle: t("pool.detail.deleteWarningTitle"),
+      warningDescription: t("pool.detail.deleteKeyWarning"),
+      confirmLabel: t("pool.detail.deleteKeyConfirm"),
     }
   }
   return {
-    title: "吊销中转凭证",
-    description: `确认吊销“${target.item.name}”吗？`,
-    warningTitle: "调用权限将立即失效",
-    warningDescription: "所有正在使用这枚凭证的调用方都将无法继续访问 Tavily 中转接口。",
-    confirmLabel: "确认吊销凭证",
+    title: t("pool.detail.revoke"),
+    description: t("pool.detail.confirmRevoke", { name: target.item.name }),
+    warningTitle: t("pool.detail.revokeWarningTitle"),
+    warningDescription: t("pool.detail.revokeWarning"),
+    confirmLabel: t("pool.detail.revokeConfirm"),
   }
 })
 
-const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
-  { id: "overview", label: "概览", icon: Activity },
-  { id: "keys", label: "Tavily Keys", icon: KeyRound },
-  { id: "logs", label: "请求日志", icon: BookOpenText },
-  { id: "access", label: "中转凭证", icon: ShieldCheck },
-  { id: "settings", label: "池设置", icon: Settings },
-]
+const tabs = computed<{ id: Tab; label: string; icon: typeof Activity }[]>(() => [
+  { id: "overview", label: t("pool.detail.tabOverview"), icon: Activity },
+  { id: "keys", label: t("pool.detail.tabKeys"), icon: KeyRound },
+  { id: "logs", label: t("pool.detail.tabLogs"), icon: BookOpenText },
+  { id: "access", label: t("pool.detail.tabAccess"), icon: ShieldCheck },
+  { id: "settings", label: t("pool.detail.tabSettings"), icon: Settings },
+])
 
 async function load(): Promise<void> {
   await runLoad(async () => {
@@ -137,7 +139,7 @@ async function load(): Promise<void> {
       hydratingUsage.value = false
       error.value = ""
     } catch (cause) {
-      error.value = errorMessage(cause, "账号池详情加载失败")
+      error.value = errorMessage(cause, t("pool.detail.loadError"))
     }
   })
 }
@@ -190,10 +192,10 @@ async function addKeys(): Promise<void> {
     keyForm.api_key = ""
     keyForm.bulk = ""
     keyFormOpen.value = false
-    toasts.show("Tavily Key 已添加，后台将自动检测额度", "success")
+    toasts.show(t("pool.detail.addSuccess"), "success")
     await load()
   } catch (cause) {
-    toasts.show(errorMessage(cause, "Tavily Key 添加失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.addError")), "error")
   } finally {
     addingKeys.value = false
   }
@@ -207,18 +209,23 @@ async function checkKey(key: TavilyKey): Promise<void> {
     if (index >= 0) keys.value[index] = checked.data
     if (selectedKeyId.value === key.id) await loadUsage(key.id)
     if (checked.data.status === "check_failed") {
-      toasts.show("检测失败：" + (checked.data.last_error ?? "上游未返回有效额度"), "error")
+      toasts.show(
+        t("pool.detail.checkFailed", {
+          error: checked.data.last_error ?? t("pool.detail.checkFailedFallback"),
+        }),
+        "error",
+      )
     } else if (checked.data.status === "invalid") {
-      toasts.show("检测完成：Tavily Key 鉴权失败", "error")
+      toasts.show(t("pool.detail.checkInvalid"), "error")
     } else if (checked.data.status === "exhausted") {
-      toasts.show("检测完成：实际可用额度已耗尽", "info")
+      toasts.show(t("pool.detail.checkExhausted"), "info")
     } else if (checked.data.status === "rate_limited") {
-      toasts.show("检测完成：Tavily 暂时限制了请求频率", "info")
+      toasts.show(t("pool.detail.checkRateLimited"), "info")
     } else {
-      toasts.show("额度与状态已同步", "success")
+      toasts.show(t("pool.detail.checkSuccess"), "success")
     }
   } catch (cause) {
-    toasts.show(errorMessage(cause, "检测失败，请检查上游连接"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.checkConnectionError")), "error")
   } finally {
     busyKey.value = ""
   }
@@ -243,9 +250,9 @@ async function saveKeyName(): Promise<void> {
     })
     Object.assign(key, updated.data)
     renamingKey.value = null
-    toasts.show("Key 名称已更新", "success")
+    toasts.show(t("pool.detail.keyNameUpdated"), "success")
   } catch (cause) {
-    toasts.show(errorMessage(cause, "Key 改名失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.keyNameError")), "error")
   } finally {
     savingKeyName.value = false
   }
@@ -257,9 +264,12 @@ async function toggleKey(key: TavilyKey): Promise<void> {
       enabled: !key.enabled,
     })
     Object.assign(key, updated.data)
-    toasts.show(key.enabled ? "Key 已启用" : "Key 已停用", "success")
+    toasts.show(
+      key.enabled ? t("pool.detail.keyEnabled") : t("pool.detail.keyDisabled"),
+      "success",
+    )
   } catch (cause) {
-    toasts.show(errorMessage(cause, "Key 状态更新失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.keyStatusError")), "error")
   }
 }
 
@@ -278,7 +288,7 @@ async function createRelay(): Promise<void> {
     relayName.value = ""
     relayFormOpen.value = false
   } catch (cause) {
-    toasts.show(errorMessage(cause, "中转 Key 生成失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.relayGenerateError")), "error")
   } finally {
     creatingRelay.value = false
   }
@@ -291,9 +301,12 @@ async function toggleRelay(relay: RelayKey): Promise<void> {
       { enabled: !relay.enabled },
     )
     Object.assign(relay, response.data)
-    toasts.show(relay.enabled ? "中转凭证已启用" : "中转凭证已停用", "success")
+    toasts.show(
+      relay.enabled ? t("pool.detail.relayEnabled") : t("pool.detail.relayDisabled"),
+      "success",
+    )
   } catch (cause) {
-    toasts.show(errorMessage(cause, "中转凭证状态更新失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.relayStatusError")), "error")
   }
 }
 
@@ -309,16 +322,21 @@ async function confirmTargetDeletion(): Promise<void> {
     if (target.kind === "key") {
       await api.delete(`/pools/${poolId.value}/keys/${target.item.id}`)
       keys.value = keys.value.filter((item) => item.id !== target.item.id)
-      toasts.show("Key 已删除", "success")
+      toasts.show(t("pool.detail.keyDeleted"), "success")
     } else {
       await api.delete(`/pools/${poolId.value}/relay-keys/${target.item.id}`)
       relayKeys.value = relayKeys.value.filter((item) => item.id !== target.item.id)
-      toasts.show("中转凭证已吊销", "success")
+      toasts.show(t("pool.detail.relayRevoked"), "success")
     }
     destructiveTarget.value = null
   } catch (cause) {
     toasts.show(
-      errorMessage(cause, target.kind === "key" ? "Key 删除失败" : "中转凭证吊销失败"),
+      errorMessage(
+        cause,
+        target.kind === "key"
+          ? t("pool.detail.keyDeleteError")
+          : t("pool.detail.relayRevokeError"),
+      ),
       "error",
     )
   } finally {
@@ -331,9 +349,9 @@ async function copyRelay(): Promise<void> {
   try {
     if (!navigator.clipboard) throw new Error("Clipboard API unavailable")
     await navigator.clipboard.writeText(oneTimeRelay.value.relay_key)
-    toasts.show("中转 Key 已复制", "success")
+    toasts.show(t("pool.detail.relayCopied"), "success")
   } catch {
-    toasts.show("自动复制失败，请手动选择上方完整 Key", "error")
+    toasts.show(t("common.copyFailed"), "error")
   }
 }
 
@@ -342,9 +360,9 @@ async function saveSettings(
 ): Promise<void> {
   try {
     pool.value = (await api.patch<Pool>(`/pools/${poolId.value}`, payload)).data
-    toasts.show("池设置已保存并应用到新请求", "success")
+    toasts.show(t("pool.detail.settingsSaved"), "success")
   } catch (cause) {
-    toasts.show(errorMessage(cause, "池设置保存失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.settingsSaveError")), "error")
   }
 }
 
@@ -354,10 +372,10 @@ async function deletePool(): Promise<void> {
   try {
     await api.delete(`/pools/${poolId.value}`)
     deletePoolOpen.value = false
-    toasts.show("账号池已删除", "success")
+    toasts.show(t("pool.detail.poolDeleted"), "success")
     await router.push("/")
   } catch (cause) {
-    toasts.show(errorMessage(cause, "账号池删除失败"), "error")
+    toasts.show(errorMessage(cause, t("pool.detail.poolDeleteError")), "error")
   } finally {
     deletingPool.value = false
   }
@@ -385,15 +403,20 @@ onMounted(load)
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
-      <UiButton @click="load">重新加载</UiButton>
+      <UiButton @click="load">{{ t("common.retry") }}</UiButton>
     </div>
     <template v-else-if="pool">
-      <RouterLink class="back-link" to="/"><ArrowLeft :size="16" />返回账号池</RouterLink>
-      <PageHeader :title="pool.name" :description="pool.description || '这个池还没有描述。'">
+      <RouterLink class="back-link" to="/"
+        ><ArrowLeft :size="16" />{{ t("common.back") }}</RouterLink
+      >
+      <PageHeader
+        :title="pool.name"
+        :description="pool.description || t('pool.detail.emptyDescription')"
+      >
         <template #actions><StatusBadge :status="pool.status" /></template>
       </PageHeader>
 
-      <nav class="tabs" role="tablist" aria-label="账号池详情">
+      <nav class="tabs" role="tablist" :aria-label="t('layout.page.poolDetail')">
         <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -432,17 +455,17 @@ onMounted(load)
       <template v-else-if="activeTab === 'logs'">
         <div class="section-actions">
           <div>
-            <h2>这个池的最近请求</h2>
-            <p>展开可查看自动切换产生的每一次内部 Key 尝试。</p>
+            <h2>{{ t("pool.detail.logsTitle") }}</h2>
+            <p>{{ t("pool.detail.logsDescription") }}</p>
           </div>
           <RouterLink class="button button--secondary" :to="`/logs?pool_id=${poolId}`">
-            查看与筛选全部日志
+            {{ t("pool.detail.viewAllLogs") }}
           </RouterLink>
         </div>
         <EmptyState
           v-if="!logs?.items.length"
-          title="这个池还没有请求"
-          description="使用中转 Key 调用任一受支持接口后即可查看完整尝试链。"
+          :title="t('pool.detail.logsEmpty')"
+          :description="t('pool.detail.logsEmptyDescription')"
         />
         <RequestLogList
           v-else
@@ -473,8 +496,8 @@ onMounted(load)
 
     <BaseModal
       :open="keyFormOpen"
-      title="添加 Tavily Key"
-      description="添加后会立即进入后台额度检测，并参与当前池的路由。"
+      :title="t('pool.detail.addKey')"
+      :description="t('pool.detail.addDescription')"
       size="large"
       :dismissible="!addingKeys"
       @close="keyFormOpen = false"
@@ -486,20 +509,24 @@ onMounted(load)
             :class="{ active: keyMode === 'single' }"
             @click="keyMode = 'single'"
           >
-            单个添加
+            {{ t("pool.detail.addSingle") }}
           </button>
           <button
             type="button"
             :class="{ active: keyMode === 'bulk' }"
             @click="keyMode = 'bulk'"
           >
-            批量粘贴
+            {{ t("pool.detail.addBulk") }}
           </button>
         </div>
         <div v-if="keyMode === 'single'" class="form-grid">
           <label class="field">
-            <span>名称</span>
-            <input v-model.trim="keyForm.name" required placeholder="例如：主账号" />
+            <span>{{ t("pool.detail.name") }}</span>
+            <input
+              v-model.trim="keyForm.name"
+              required
+              :placeholder="t('pool.detail.namePlaceholder')"
+            />
           </label>
           <label class="field">
             <span>Tavily API Key</span>
@@ -513,18 +540,18 @@ onMounted(load)
           </label>
         </div>
         <label v-else class="field">
-          <span>每行一个 Key，可使用“名称,Key”格式</span>
+          <span>{{ t("pool.detail.bulkHint") }}</span>
           <textarea
             v-model="keyForm.bulk"
             rows="7"
             required
-            placeholder="主账号,tvly-…&#10;备用账号,tvly-…"
+            :placeholder="t('pool.detail.bulkPlaceholder')"
           />
         </label>
       </form>
       <template #footer>
         <UiButton variant="ghost" :disabled="addingKeys" @click="keyFormOpen = false">
-          取消
+          {{ t("common.cancel") }}
         </UiButton>
         <UiButton
           variant="primary"
@@ -532,28 +559,33 @@ onMounted(load)
           form="add-key-form"
           :disabled="addingKeys || !canAddKeys"
         >
-          {{ addingKeys ? "正在添加…" : "添加并开始检测" }}
+          {{ addingKeys ? t("pool.detail.adding") : t("pool.detail.addSubmit") }}
         </UiButton>
       </template>
     </BaseModal>
 
     <BaseModal
       :open="relayFormOpen"
-      title="生成中转凭证"
-      description="凭证完整值只显示一次，生成后请立即安全保存。"
+      :title="t('pool.detail.generateCredential')"
+      :description="t('pool.detail.relayOnce')"
       size="small"
       :dismissible="!creatingRelay"
       @close="relayFormOpen = false"
     >
       <form id="create-relay-form" class="form-panel" @submit.prevent="createRelay">
         <label class="field">
-          <span>凭证名称</span>
-          <input v-model.trim="relayName" required autofocus placeholder="例如：生产环境" />
+          <span>{{ t("pool.detail.credentialName") }}</span>
+          <input
+            v-model.trim="relayName"
+            required
+            autofocus
+            :placeholder="t('pool.detail.credentialPlaceholder')"
+          />
         </label>
       </form>
       <template #footer>
         <UiButton variant="ghost" :disabled="creatingRelay" @click="relayFormOpen = false">
-          取消
+          {{ t("common.cancel") }}
         </UiButton>
         <UiButton
           variant="primary"
@@ -561,28 +593,28 @@ onMounted(load)
           form="create-relay-form"
           :disabled="creatingRelay || !relayName"
         >
-          {{ creatingRelay ? "正在生成…" : "生成凭证" }}
+          {{ creatingRelay ? t("pool.detail.generating") : t("pool.access.generate") }}
         </UiButton>
       </template>
     </BaseModal>
 
     <BaseModal
       :open="Boolean(renamingKey)"
-      title="修改 Key 名称"
-      description="名称仅用于控制台识别，不会发送给 Tavily。"
+      :title="t('pool.detail.renameKey')"
+      :description="t('pool.detail.renameDescription')"
       size="small"
       :dismissible="!savingKeyName"
       @close="renamingKey = null"
     >
       <form id="rename-key-form" class="form-panel" @submit.prevent="saveKeyName">
         <label class="field">
-          <span>Key 名称</span>
+          <span>{{ t("pool.detail.keyName") }}</span>
           <input v-model.trim="renameKeyName" required autofocus maxlength="100" />
         </label>
       </form>
       <template #footer>
         <UiButton variant="ghost" :disabled="savingKeyName" @click="renamingKey = null">
-          取消
+          {{ t("common.cancel") }}
         </UiButton>
         <UiButton
           variant="primary"
@@ -590,18 +622,18 @@ onMounted(load)
           form="rename-key-form"
           :disabled="savingKeyName || !renameKeyName.trim()"
         >
-          {{ savingKeyName ? "正在保存…" : "保存名称" }}
+          {{ savingKeyName ? t("pool.detail.savingName") : t("pool.detail.saveName") }}
         </UiButton>
       </template>
     </BaseModal>
 
     <ConfirmModal
       :open="deletePoolOpen"
-      title="删除账号池"
-      :description="pool ? `确认删除“${pool.name}”吗？` : undefined"
-      warning-title="此操作无法撤销"
-      warning-description="池内 Tavily Key、额度快照和全部中转凭证都会一并删除。"
-      confirm-label="确认删除账号池"
+      :title="t('pool.detail.deletePool')"
+      :description="pool ? t('pool.detail.confirmDeletePool', { name: pool.name }) : undefined"
+      :warning-title="t('pool.detail.deleteWarningTitle')"
+      :warning-description="t('pool.detail.deletePoolWarning')"
+      :confirm-label="t('pool.detail.deletePoolConfirm')"
       :busy="deletingPool"
       @close="deletePoolOpen = false"
       @confirm="deletePool"

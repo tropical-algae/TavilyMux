@@ -2,10 +2,13 @@
 import { CheckCircle2, Copy, KeyRound, Plus, Trash2 } from "lucide-vue-next"
 
 import type { CreatedRelayKey, RelayKey } from "../types/api"
+import { useI18n } from "../i18n"
 import { formatDate } from "../utils/format"
 import EmptyState from "./EmptyState.vue"
 import StatusBadge from "./StatusBadge.vue"
 import UiButton from "./UiButton.vue"
+
+const { t } = useI18n()
 
 defineProps<{
   relayKeys: RelayKey[]
@@ -24,30 +27,32 @@ defineEmits<{
 <template>
   <div class="section-actions">
     <div>
-      <h2>中转凭证</h2>
-      <p>调用方通过 Bearer 中转 Key 访问本服务的 /search。</p>
+      <h2>{{ t("pool.access.title") }}</h2>
+      <p>{{ t("pool.access.description") }}</p>
     </div>
     <UiButton variant="primary" @click="$emit('create')">
-      <Plus :size="17" />生成凭证
+      <Plus :size="17" />{{ t("pool.access.generate") }}
     </UiButton>
   </div>
   <section v-if="oneTimeRelay" class="one-time-secret">
     <div>
-      <h2>新 Key 只显示这一次</h2>
-      <p>复制后安全地交给调用方。</p>
+      <h2>{{ t("pool.access.secretOnce") }}</h2>
+      <p>{{ t("pool.access.secretHint") }}</p>
     </div>
     <code>{{ oneTimeRelay.relay_key }}</code>
     <div class="one-time-secret__actions">
-      <UiButton variant="primary" @click="$emit('copy')"> <Copy :size="16" />复制 </UiButton>
+      <UiButton variant="primary" @click="$emit('copy')">
+        <Copy :size="16" />{{ t("common.copy") }}
+      </UiButton>
       <UiButton variant="ghost" @click="$emit('dismissSecret')">
-        <CheckCircle2 :size="16" />我已保存
+        <CheckCircle2 :size="16" />{{ t("pool.access.saved") }}
       </UiButton>
     </div>
   </section>
   <EmptyState
     v-if="relayKeys.length === 0"
-    title="还没有中转凭证"
-    description="生成凭证后，调用方才能通过这个账号池访问 /search。"
+    :title="t('pool.access.empty')"
+    :description="t('pool.access.emptyDescription')"
   />
   <div v-else class="credential-list">
     <article v-for="relay in relayKeys" :key="relay.id" class="credential-record">
@@ -59,18 +64,18 @@ defineEmits<{
         </div>
       </div>
       <div class="credential-record__last-used">
-        <span>最近使用</span>
+        <span>{{ t("pool.access.lastUsed") }}</span>
         <strong>{{ formatDate(relay.last_used_at) }}</strong>
       </div>
       <StatusBadge :status="relay.enabled ? 'available' : 'disabled'" />
       <div class="row-actions">
         <UiButton size="small" @click="$emit('toggle', relay)">
-          {{ relay.enabled ? "停用" : "启用" }}
+          {{ relay.enabled ? t("pool.access.disable") : t("common.enable") }}
         </UiButton>
         <button
           class="icon-button icon-button--danger"
           type="button"
-          :aria-label="`吊销 ${relay.name}`"
+          :aria-label="t('pool.access.revokeLabel', { name: relay.name })"
           @click="$emit('delete', relay)"
         >
           <Trash2 :size="16" />

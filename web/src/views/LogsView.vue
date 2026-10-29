@@ -12,9 +12,11 @@ import RequestLogList from "../components/RequestLogList.vue"
 import SelectControl from "../components/SelectControl.vue"
 import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
+import { useI18n } from "../i18n"
 import type { PaginatedLogs, Pool, TavilyKey } from "../types/api"
 
 const logs = ref<PaginatedLogs | null>(null)
+const { t } = useI18n()
 const pools = ref<Pool[]>([])
 const keys = ref<TavilyKey[]>([])
 const { initialized, loading, run: runLoad, showSkeleton } = useLoadingBoundary()
@@ -50,23 +52,23 @@ const activeFilterCount = computed(
 )
 
 const poolOptions = computed(() => [
-  { value: "", label: "全部账号池" },
+  { value: "", label: t("logs.allPools") },
   ...pools.value.map((pool) => ({ value: pool.id, label: pool.name })),
 ])
 const keyOptions = computed(() => [
-  { value: "", label: "全部 Key" },
+  { value: "", label: t("logs.allKeys") },
   ...keys.value.map((key) => ({ value: key.id, label: key.name })),
 ])
-const resultOptions = [
-  { value: "", label: "全部结果" },
-  { value: "true", label: "成功" },
-  { value: "false", label: "失败" },
-]
-const retryOptions = [
-  { value: "", label: "全部请求" },
-  { value: "true", label: "发生切换" },
-  { value: "false", label: "未切换" },
-]
+const resultOptions = computed(() => [
+  { value: "", label: t("logs.allResults") },
+  { value: "true", label: t("logs.success") },
+  { value: "false", label: t("logs.failed") },
+])
+const retryOptions = computed(() => [
+  { value: "", label: t("logs.allRequests") },
+  { value: "true", label: t("logs.retried") },
+  { value: "false", label: t("logs.noRetry") },
+])
 
 async function loadKeys(selectedKeyId = ""): Promise<void> {
   filters.value.key_id = ""
@@ -113,7 +115,7 @@ async function runDataLoad(operation: () => Promise<void>): Promise<void> {
       await operation()
       error.value = ""
     } catch (cause) {
-      error.value = errorMessage(cause, "请求日志加载失败")
+      error.value = errorMessage(cause, t("logs.loadError"))
     }
   })
 }
@@ -174,17 +176,14 @@ onMounted(() =>
 
 <template>
   <div class="view-stack">
-    <PageHeader
-      title="请求日志"
-      description="每条外部调用关联其内部 Key 尝试，不保存搜索正文。"
-    >
+    <PageHeader :title="t('logs.title')" :description="t('logs.description')">
       <template #actions>
         <UiButton class="filter-toggle" @click="filtersOpen = true">
-          <SlidersHorizontal :size="16" />筛选
+          <SlidersHorizontal :size="16" />{{ t("logs.filter") }}
           <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
         </UiButton>
         <UiButton :disabled="loading" @click="load">
-          <RefreshCw :size="16" :class="{ spin: loading }" />刷新
+          <RefreshCw :size="16" :class="{ spin: loading }" />{{ t("common.refresh") }}
         </UiButton>
       </template>
     </PageHeader>
@@ -192,7 +191,7 @@ onMounted(() =>
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error" class="inline-error">
       <p>{{ error }}</p>
-      <UiButton @click="load">重新加载</UiButton>
+      <UiButton @click="load">{{ t("common.retry") }}</UiButton>
     </div>
     <template v-else-if="initialized">
       <form
@@ -202,20 +201,20 @@ onMounted(() =>
       >
         <div class="filter-bar__mobile-header">
           <div>
-            <h2>筛选请求</h2>
-            <p>组合条件快速定位一次调用链。</p>
+            <h2>{{ t("logs.filterTitle") }}</h2>
+            <p>{{ t("logs.filterDescription") }}</p>
           </div>
           <button
             class="icon-button"
             type="button"
-            aria-label="关闭筛选"
+            :aria-label="t('logs.closeFilters')"
             @click="filtersOpen = false"
           >
             <X :size="18" />
           </button>
         </div>
         <div class="filter-field">
-          <span>账号池</span>
+          <span>{{ t("logs.pool") }}</span>
           <SelectControl
             v-model="filters.pool_id"
             :options="poolOptions"
@@ -223,7 +222,7 @@ onMounted(() =>
           />
         </div>
         <div class="filter-field">
-          <span>Tavily Key</span>
+          <span>{{ t("logs.key") }}</span>
           <SelectControl
             v-model="filters.key_id"
             :options="keyOptions"
@@ -231,60 +230,63 @@ onMounted(() =>
           />
         </div>
         <label>
-          <span>状态码</span>
+          <span>{{ t("logs.statusCode") }}</span>
           <input
             v-model="filters.status_code"
             inputmode="numeric"
-            placeholder="例如 200 / 429"
+            :placeholder="t('logs.statusPlaceholder')"
           />
         </label>
         <div class="filter-field">
-          <span>结果</span>
+          <span>{{ t("logs.result") }}</span>
           <SelectControl v-model="filters.success" :options="resultOptions" />
         </div>
         <div class="filter-field">
-          <span>自动切换</span>
+          <span>{{ t("logs.retryFilter") }}</span>
           <SelectControl v-model="filters.retried" :options="retryOptions" />
         </div>
         <label>
-          <span>请求 ID</span>
-          <input v-model.trim="filters.request_id" placeholder="内部或外部请求 ID" />
+          <span>{{ t("logs.requestId") }}</span>
+          <input
+            v-model.trim="filters.request_id"
+            :placeholder="t('logs.requestIdPlaceholder')"
+          />
         </label>
         <div class="filter-field">
-          <span>开始时间</span>
-          <DateTimeControl v-model="filters.time_from" aria-label="开始时间" />
+          <span>{{ t("logs.startTime") }}</span>
+          <DateTimeControl v-model="filters.time_from" :aria-label="t('logs.startTime')" />
         </div>
         <div class="filter-field">
-          <span>结束时间</span>
-          <DateTimeControl v-model="filters.time_to" aria-label="结束时间" />
+          <span>{{ t("logs.endTime") }}</span>
+          <DateTimeControl v-model="filters.time_to" :aria-label="t('logs.endTime')" />
         </div>
         <div class="filter-actions">
           <UiButton variant="ghost" :disabled="!activeFilterCount" @click="clearFilters">
-            重置
+            {{ t("common.reset") }}
           </UiButton>
-          <UiButton variant="primary" type="submit">应用筛选</UiButton>
+          <UiButton variant="primary" type="submit">{{ t("logs.apply") }}</UiButton>
         </div>
       </form>
 
       <EmptyState
         v-if="!logs?.items.length"
-        title="没有符合条件的请求"
-        description="调整筛选条件，或先通过任意中转 Key 调用 /search。"
+        :title="t('logs.empty')"
+        :description="t('logs.emptyDescription')"
       />
       <RequestLogList v-else :logs="logs.items" :expanded="expanded" @toggle="toggle">
         <template #footer>
           <footer class="pagination">
-            <span>共 {{ logs.total }} 条</span>
+            <span>{{ t("logs.total", { count: logs.total }) }}</span>
             <div>
               <UiButton size="small" :disabled="logs.page <= 1" @click="previousPage">
-                上一页</UiButton
-              ><span>第 {{ logs.page }} 页</span
+                {{ t("logs.previous") }}</UiButton
+              ><span>{{ t("logs.page", { page: logs.page }) }}</span
               ><UiButton
                 size="small"
                 :disabled="logs.page * logs.page_size >= logs.total"
                 @click="nextPage"
               >
-                下一页
+                {{ t("logs.next") }}
               </UiButton>
             </div>
           </footer>

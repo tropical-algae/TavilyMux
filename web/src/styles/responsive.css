@@ -38,6 +38,10 @@
     justify-items: center;
   }
 
+  .workspace-bar__tools .command-trigger {
+    width: min(32vw, 330px);
+  }
+
   .admin-chip,
   .nav-action {
     justify-content: center;
@@ -85,6 +89,10 @@
     padding: 0 18px;
   }
 
+  .workspace-bar__tools {
+    gap: 4px;
+  }
+
   .mobile-brand {
     display: inline-flex;
     font-size: 0;
@@ -106,7 +114,8 @@
     white-space: nowrap;
   }
 
-  .command-trigger {
+  .command-trigger,
+  .workspace-bar__tools .command-trigger {
     width: 38px;
     min-height: 38px;
     justify-content: center;
@@ -114,8 +123,17 @@
   }
 
   .command-trigger > span,
-  .command-trigger kbd,
-  .workspace-bar__status {
+  .command-trigger kbd {
+    display: none;
+  }
+
+  .preference-control {
+    width: 38px;
+    padding: 0;
+  }
+
+  .preference-control > span,
+  .preference-control > svg:last-child:not(:first-child) {
     display: none;
   }
 
@@ -342,6 +360,19 @@
 }
 
 @media (max-width: 560px) {
+  .workspace-bar {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .workspace-bar__tools {
+    gap: 2px;
+  }
+
+  .workspace-preferences {
+    gap: 2px;
+  }
+
   .workspace-bar {
     padding: 0 14px;
   }

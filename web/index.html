@@ -1,11 +1,32 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f5f6f4" />
-    <meta name="description" content="TavilyMux 管理控制台" />
-    <link rel="icon" type="image/svg+xml" href="/tavily-mux.svg" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="TavilyMux management console" />
+    <link id="app-icon" rel="icon" type="image/svg+xml" href="/tavily-mux.svg" />
+    <script>
+      ;(() => {
+        let theme = null
+        let locale = null
+        try {
+          theme = localStorage.getItem("tavily-mux-theme")
+          locale = localStorage.getItem("tavily-mux-locale")
+        } catch {
+          // Storage can be unavailable in hardened browser contexts.
+        }
+        const dark =
+          theme === "dark" ||
+          (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)
+        document.documentElement.dataset.theme = dark ? "dark" : "light"
+        document.documentElement.style.colorScheme = dark ? "dark" : "light"
+        document.querySelector("#app-icon").href = dark
+          ? "/tavily-mux-dark.svg"
+          : "/tavily-mux.svg"
+        document.documentElement.lang = locale === "zh-CN" || locale === "en" ? locale : "en"
+      })()
+    </script>
     <title>TavilyMux</title>
   </head>
   <body>

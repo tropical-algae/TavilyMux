@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Trash2 } from "lucide-vue-next"
-import { reactive, ref, watch } from "vue"
+import { computed, reactive, ref, watch } from "vue"
 
+import { useI18n } from "../i18n"
 import type { Pool, RoutingStrategy } from "../types/api"
 import SelectControl from "./SelectControl.vue"
 import UiButton from "./UiButton.vue"
+
+const { t } = useI18n()
 
 const props = defineProps<{ pool: Pool }>()
 const emit = defineEmits<{
@@ -12,10 +15,10 @@ const emit = defineEmits<{
   delete: []
 }>()
 
-const routingOptions = [
-  { value: "max_remaining", label: "剩余额度优先" },
-  { value: "random", label: "随机可用 Key" },
-]
+const routingOptions = computed(() => [
+  { value: "max_remaining", label: t("form.routingMaxRemaining") },
+  { value: "random", label: t("form.routingRandom") },
+])
 const connectionOverride = ref(false)
 const proxyTouched = reactive({ http: false, https: false })
 const form = reactive({
@@ -97,23 +100,25 @@ watch(() => props.pool, sync, { immediate: true })
   <form class="panel settings-form" @submit.prevent="submit">
     <div class="section-heading">
       <div>
-        <h2>池级路由设置</h2>
-        <p>保存后通过新的 Runtime 快照应用，不阻塞正在进行的请求。</p>
+        <h2>{{ t("pool.settings.routeTitle") }}</h2>
+        <p>{{ t("pool.settings.routeDescription") }}</p>
       </div>
     </div>
     <div class="form-grid">
       <label class="field"
-        ><span>池名称</span><input v-model.trim="form.name" required
+        ><span>{{ t("dashboard.poolName") }}</span
+        ><input v-model.trim="form.name" required
       /></label>
       <div class="field">
-        <span>路由策略</span>
+        <span>{{ t("dashboard.routingStrategy") }}</span>
         <SelectControl v-model="form.strategy" :options="routingOptions" />
       </div>
       <label class="field field--span"
-        ><span>描述</span><textarea v-model="form.description" rows="3" />
+        ><span>{{ t("form.description") }}</span
+        ><textarea v-model="form.description" rows="3" />
       </label>
       <label class="field"
-        ><span>检测间隔（秒）</span
+        ><span>{{ t("form.monitorInterval") }}</span
         ><input
           v-model.number="form.monitor_interval_seconds"
           type="number"
@@ -121,50 +126,55 @@ watch(() => props.pool, sync, { immediate: true })
           max="86400"
       /></label>
       <label class="field"
-        ><span>最大尝试次数</span
+        ><span>{{ t("form.maxAttempts") }}</span
         ><input v-model.number="form.max_attempts" type="number" min="1" max="10"
       /></label>
       <label class="field"
-        ><span>并发上限</span
+        ><span>{{ t("form.concurrencyLimit") }}</span
         ><input
           v-model.number="form.concurrency_limit"
           type="number"
           min="1"
-          placeholder="不限制"
+          :placeholder="t('common.noLimit')"
       /></label>
       <label class="field"
-        ><span>每分钟请求上限</span
-        ><input v-model.number="form.rpm_limit" type="number" min="1" placeholder="不限制"
+        ><span>{{ t("form.rpmLimit") }}</span
+        ><input
+          v-model.number="form.rpm_limit"
+          type="number"
+          min="1"
+          :placeholder="t('common.noLimit')"
       /></label>
     </div>
     <label class="switch-field"
       ><input v-model="form.enabled" type="checkbox" /><span
-        ><strong>启用账号池</strong><small>停用后所有中转凭证会立即停止路由。</small></span
+        ><strong>{{ t("pool.settings.enable") }}</strong
+        ><small>{{ t("pool.settings.enableHint") }}</small></span
       ></label
     >
     <div class="section-divider"></div>
     <div class="section-heading">
       <div>
-        <h2>连接覆盖</h2>
-        <p>默认继承全局 Tavily 地址和 Clash HTTP 代理；开启后仅影响这个池。</p>
+        <h2>{{ t("pool.settings.connectionTitle") }}</h2>
+        <p>{{ t("pool.settings.connectionDescription") }}</p>
       </div>
     </div>
     <label class="switch-field"
       ><input v-model="connectionOverride" type="checkbox" /><span
-        ><strong>覆盖全局连接配置</strong
-        ><small>关闭并保存会清除当前池的全部连接覆盖。</small></span
+        ><strong>{{ t("pool.settings.override") }}</strong
+        ><small>{{ t("pool.settings.overrideHint") }}</small></span
       ></label
     >
     <div v-if="connectionOverride" class="form-grid">
       <label class="field field--span"
-        ><span>Tavily Base URL（留空继承全局）</span
+        ><span>{{ t("form.tavilyBaseUrl") }}</span
         ><input
           v-model.trim="form.upstream_base_url"
           type="url"
           placeholder="https://api.tavily.com"
       /></label>
       <div class="field">
-        <label for="pool-http-proxy">HTTP 代理</label>
+        <label for="pool-http-proxy">{{ t("form.httpProxy") }}</label>
         <input
           id="pool-http-proxy"
           v-model.trim="form.http_proxy"
@@ -172,18 +182,20 @@ watch(() => props.pool, sync, { immediate: true })
           :placeholder="pool.http_proxy || 'http://127.0.0.1:7890'"
           @input="proxyTouched.http = true"
         />
-        <small v-if="pool.http_proxy && !proxyTouched.http">当前：{{ pool.http_proxy }}</small>
+        <small v-if="pool.http_proxy && !proxyTouched.http">{{
+          t("common.current", { value: pool.http_proxy })
+        }}</small>
         <button
           v-if="pool.http_proxy"
           class="field-action"
           type="button"
           @click="clearProxy('http')"
         >
-          清除池级 HTTP 代理
+          {{ t("pool.settings.clearHttp") }}
         </button>
       </div>
       <div class="field">
-        <label for="pool-https-proxy">HTTPS 代理</label>
+        <label for="pool-https-proxy">{{ t("form.httpsProxy") }}</label>
         <input
           id="pool-https-proxy"
           v-model.trim="form.https_proxy"
@@ -191,30 +203,30 @@ watch(() => props.pool, sync, { immediate: true })
           :placeholder="pool.https_proxy || 'http://127.0.0.1:7890'"
           @input="proxyTouched.https = true"
         />
-        <small v-if="pool.https_proxy && !proxyTouched.https"
-          >当前：{{ pool.https_proxy }}</small
-        >
+        <small v-if="pool.https_proxy && !proxyTouched.https">{{
+          t("common.current", { value: pool.https_proxy })
+        }}</small>
         <button
           v-if="pool.https_proxy"
           class="field-action"
           type="button"
           @click="clearProxy('https')"
         >
-          清除池级 HTTPS 代理
+          {{ t("pool.settings.clearHttps") }}
         </button>
       </div>
       <label class="switch-field field--span"
         ><input v-model="form.allow_direct_fallback" type="checkbox" /><span
-          ><strong>代理失败时允许直连</strong
-          ><small>可能使流量绕过代理，默认建议关闭。</small></span
+          ><strong>{{ t("settings.allowDirect") }}</strong
+          ><small>{{ t("pool.settings.directFallbackHint") }}</small></span
         ></label
       >
     </div>
     <div class="form-actions">
       <UiButton variant="danger" @click="emit('delete')">
-        <Trash2 :size="16" />删除账号池
+        <Trash2 :size="16" />{{ t("pool.settings.delete") }}
       </UiButton>
-      <UiButton variant="primary" type="submit">保存池设置</UiButton>
+      <UiButton variant="primary" type="submit">{{ t("pool.settings.save") }}</UiButton>
     </div>
   </form>
 </template>

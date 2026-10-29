@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed } from "vue"
 
+import { useI18n } from "../i18n"
 import type { PaginatedLogs, Pool, TavilyKey, UsageSnapshot } from "../types/api"
 import { formatDate, formatLatency, formatNumber } from "../utils/format"
 import EmptyState from "./EmptyState.vue"
 import LoadingSkeleton from "./LoadingSkeleton.vue"
 import SelectControl from "./SelectControl.vue"
 import UsageTimeline from "./UsageTimeline.vue"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   pool: Pool
@@ -27,33 +30,36 @@ const keyOptions = computed(() => props.keys.map((key) => ({ value: key.id, labe
 <template>
   <section class="telemetry-rail telemetry-rail--compact">
     <div>
-      <span>可用 Key</span
+      <span>{{ t("pool.overview.availableKeys") }}</span
       ><strong>{{ pool.available_key_count }} / {{ pool.key_count }}</strong>
     </div>
     <div>
-      <span>最高单 Key 可用额度</span
+      <span>{{ t("pool.overview.highestQuota") }}</span
       ><strong>{{ formatNumber(pool.estimated_remaining) }}</strong>
     </div>
     <div>
-      <span>路由策略</span
-      ><strong>{{ pool.strategy === "random" ? "随机可用" : "剩余额度优先" }}</strong>
+      <span>{{ t("pool.overview.routing") }}</span
+      ><strong>{{
+        pool.strategy === "random" ? t("form.routingRandom") : t("form.routingMaxRemaining")
+      }}</strong>
     </div>
     <div>
-      <span>最大尝试</span><strong>{{ pool.max_attempts }} 次</strong>
+      <span>{{ t("pool.overview.maxAttempts") }}</span
+      ><strong>{{ t("pool.overview.maxAttemptsValue", { count: pool.max_attempts }) }}</strong>
     </div>
   </section>
 
   <section class="panel">
     <div class="section-heading">
       <div>
-        <h2>额度时间线</h2>
-        <p>同时核对 Key 独立限额与账户额度，实际可用值用于路由排序。</p>
+        <h2>{{ t("pool.overview.timelineTitle") }}</h2>
+        <p>{{ t("pool.overview.timelineDescription") }}</p>
       </div>
       <SelectControl
         v-if="keys.length"
         :model-value="selectedKeyId"
         :options="keyOptions"
-        aria-label="选择 Tavily Key"
+        :aria-label="t('pool.overview.selectKey')"
         @update:model-value="emit('update:selectedKeyId', $event)"
       />
     </div>
@@ -64,24 +70,24 @@ const keyOptions = computed(() => props.keys.map((key) => ({ value: key.id, labe
   <section class="panel">
     <div class="section-heading">
       <div>
-        <h2>最近请求</h2>
-        <p>自动切换会以多次内部尝试呈现。</p>
+        <h2>{{ t("pool.overview.recentTitle") }}</h2>
+        <p>{{ t("pool.overview.recentDescription") }}</p>
       </div>
     </div>
     <EmptyState
       v-if="!logs?.items.length"
-      title="这个池还没有请求"
-      description="使用中转 Key 调用任一受支持接口后即可观察路由结果。"
+      :title="t('pool.overview.recentEmpty')"
+      :description="t('pool.overview.recentEmptyDescription')"
     />
     <div v-else class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>时间</th>
-            <th>状态</th>
-            <th>尝试</th>
-            <th>耗时</th>
-            <th>请求 ID</th>
+            <th>{{ t("pool.overview.tableTime") }}</th>
+            <th>{{ t("pool.overview.tableStatus") }}</th>
+            <th>{{ t("pool.overview.tableAttempts") }}</th>
+            <th>{{ t("pool.overview.tableLatency") }}</th>
+            <th>{{ t("pool.overview.tableRequestId") }}</th>
           </tr>
         </thead>
         <tbody>

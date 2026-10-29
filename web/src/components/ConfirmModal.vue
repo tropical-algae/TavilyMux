@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { TriangleAlert } from "lucide-vue-next"
 
+import { useI18n } from "../i18n"
 import BaseModal from "./BaseModal.vue"
 import UiButton from "./UiButton.vue"
+
+const { t } = useI18n()
 
 withDefaults(
   defineProps<{
@@ -43,9 +46,11 @@ defineEmits<{
       </div>
     </div>
     <template #footer>
-      <UiButton variant="ghost" :disabled="busy" @click="$emit('close')">取消</UiButton>
+      <UiButton variant="ghost" :disabled="busy" @click="$emit('close')">{{
+        t("common.cancel")
+      }}</UiButton>
       <UiButton variant="danger" :disabled="busy" @click="$emit('confirm')">
-        {{ busy ? "正在处理…" : confirmLabel }}
+        {{ busy ? t("common.processing") : confirmLabel }}
       </UiButton>
     </template>
   </BaseModal>

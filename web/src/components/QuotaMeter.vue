@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue"
 
+import { useI18n } from "../i18n"
 import { formatNumber } from "../utils/format"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   label: string
@@ -15,9 +18,9 @@ const percentage = computed(() => {
 })
 
 const valueLabel = computed(() => {
-  if (props.usage === null && props.limit === null) return "尚未同步"
+  if (props.usage === null && props.limit === null) return t("common.notSynced")
   return `${formatNumber(props.usage)} / ${
-    props.limit === null ? "未设上限" : formatNumber(props.limit)
+    props.limit === null ? t("common.unlimited") : formatNumber(props.limit)
   }`
 })
 
@@ -35,7 +38,7 @@ const tone = computed(() => {
       class="quota-progress"
       :class="`quota-progress--${tone}`"
       role="progressbar"
-      :aria-label="`${label}使用量`"
+      :aria-label="t('common.usageLabel', { label })"
       aria-valuemin="0"
       :aria-valuemax="limit ?? undefined"
       :aria-valuenow="limit === null ? undefined : (usage ?? 0)"

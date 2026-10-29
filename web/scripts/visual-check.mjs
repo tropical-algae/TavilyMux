@@ -250,11 +250,11 @@ async function installRoutes(page, authenticated) {
         body: readFileSync(path),
       })
     }
-    if (url.pathname === "/tavily-mux.svg") {
+    if (["/tavily-mux.svg", "/tavily-mux-dark.svg"].includes(url.pathname)) {
       return route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
-        body: readFileSync(join(publicRoot, "tavily-mux.svg")),
+        body: readFileSync(join(publicRoot, url.pathname.slice(1))),
       })
     }
     return route.fulfill({
@@ -266,7 +266,8 @@ async function installRoutes(page, authenticated) {
 }
 
 async function capture(browser, name, viewport, path, authenticated, interact = null) {
-  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
+  const page = await browser.newPage({ viewport, deviceScaleFactor: 1, locale: "zh-CN" })
+  await page.addInitScript(() => localStorage.setItem("tavily-mux-locale", "zh-CN"))
   await installRoutes(page, authenticated)
   await page.goto(`http://app.local${path}`, { waitUntil: "networkidle" })
   if (interact) {
@@ -333,6 +334,18 @@ try {
   await capture(browser, "dashboard-desktop", { width: 1440, height: 1000 }, "/", true)
   await capture(browser, "dashboard-tablet", { width: 1024, height: 900 }, "/", true)
   await capture(browser, "dashboard-mobile", { width: 390, height: 844 }, "/", true)
+  await capture(
+    browser,
+    "dashboard-english-dark-desktop",
+    { width: 1440, height: 1000 },
+    "/",
+    true,
+    async (page) => {
+      await page.getByRole("button", { name: "切换为 English" }).click()
+      await page.getByRole("button", { name: "Choose appearance" }).click()
+      await page.getByRole("menuitemradio", { name: "Dark" }).click()
+    },
+  )
   await capture(
     browser,
     "pool-detail-desktop",

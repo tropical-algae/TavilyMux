@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-vue-next"
 
+import { useI18n } from "../i18n"
 import { useToastStore } from "../stores/toasts"
 
 const toasts = useToastStore()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -21,7 +23,7 @@ const toasts = useToastStore()
       <button
         class="icon-button"
         type="button"
-        aria-label="关闭提示"
+        :aria-label="t('common.closeNotice')"
         @click="toasts.dismiss(toast.id)"
       >
         <X :size="16" />

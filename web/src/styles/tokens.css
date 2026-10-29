@@ -108,3 +108,68 @@
   --duration-reveal: 240ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #191919;
+  --surface: #202020;
+  --surface-subtle: #242424;
+  --surface-raised: #272727;
+  --surface-muted: #30302f;
+  --surface-skeleton: #2b2d2b;
+  --surface-hover: rgba(255, 255, 255, 0.055);
+  --surface-selected: rgba(255, 255, 255, 0.085);
+  --surface-pressed: rgba(255, 255, 255, 0.12);
+  --sidebar: #202020;
+
+  --text: #ecebe8;
+  --text-soft: rgba(236, 235, 232, 0.78);
+  --text-muted: rgba(236, 235, 232, 0.6);
+  --text-faint: rgba(236, 235, 232, 0.4);
+  --text-placeholder: #a4a49f;
+  --text-on-solid: #171817;
+  --border: rgba(255, 255, 255, 0.085);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --control-border-hover: rgba(255, 255, 255, 0.28);
+
+  --action-primary: #e8e7e3;
+  --action-primary-hover: #ffffff;
+  --accent: #79aaa2;
+  --accent-hover: #91bbb4;
+  --accent-soft: #273b37;
+  --accent-ink: #a8d3cb;
+  --warning: #e3bb5f;
+  --warning-soft: #403620;
+  --warning-border: rgba(227, 187, 95, 0.22);
+  --danger: #ee8585;
+  --danger-hover: #f39b9b;
+  --danger-ink: #f2a0a0;
+  --danger-soft: #452a2a;
+  --danger-soft-hover: #533030;
+  --danger-border: rgba(238, 133, 133, 0.24);
+  --danger-border-subtle: rgba(238, 133, 133, 0.18);
+  --info: #8baed4;
+  --disabled-indicator: #666a66;
+
+  --meter-track: #343432;
+  --meter-positive: #70a79e;
+  --meter-warning: #d7aa53;
+  --meter-danger: #d87878;
+  --chart-grid: #353634;
+
+  --overlay: rgba(0, 0, 0, 0.58);
+  --overlay-soft: rgba(0, 0, 0, 0.5);
+  --topbar: rgba(25, 25, 25, 0.94);
+  --topbar-control: rgba(32, 32, 32, 0.86);
+  --mobile-nav: rgba(25, 25, 25, 0.98);
+  --skeleton-highlight: rgba(255, 255, 255, 0.07);
+  --toast: #ecebe8;
+  --toast-error: #e8b0b0;
+  --toast-text: #191919;
+
+  --shadow-float: 0 14px 36px rgba(0, 0, 0, 0.42), 0 2px 9px rgba(0, 0, 0, 0.3);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-sheet: 0 -12px 32px rgba(0, 0, 0, 0.42);
+  --control-inset: inset 0 1px 1px rgba(255, 255, 255, 0.025);
+}

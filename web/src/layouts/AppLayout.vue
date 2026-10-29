@@ -12,50 +12,54 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router"
 
+import BrandLogo from "../components/BrandLogo.vue"
+import WorkspacePreferences from "../components/WorkspacePreferences.vue"
+import { useI18n } from "../i18n"
 import { useAuthStore } from "../stores/auth"
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const { t } = useI18n()
 const commandOpen = ref(false)
 const commandQuery = ref("")
 const commandInput = ref<HTMLInputElement | null>(null)
 const commandPalette = ref<HTMLElement | null>(null)
 const commandPreviousFocus = ref<HTMLElement | null>(null)
 
-const navigation = [
+const navigation = computed(() => [
   {
     to: "/",
-    label: "账号池",
-    shortLabel: "账号池",
+    label: t("nav.pools"),
+    shortLabel: t("nav.pools"),
     icon: Network,
-    hint: "运行指标、Key 与路由策略",
+    hint: t("nav.poolsHint"),
   },
   {
     to: "/logs",
-    label: "请求日志",
-    shortLabel: "日志",
+    label: t("nav.logs"),
+    shortLabel: t("nav.logsShort"),
     icon: BookOpenText,
-    hint: "请求与切换链路",
+    hint: t("nav.logsHint"),
   },
   {
     to: "/settings",
-    label: "连接设置",
-    shortLabel: "设置",
+    label: t("nav.settings"),
+    shortLabel: t("nav.settingsShort"),
     icon: Settings,
-    hint: "上游、代理与运行参数",
+    hint: t("nav.settingsHint"),
   },
-]
+])
 
 const currentPage = computed(() => {
-  if (route.path.startsWith("/pools/")) return { label: "账号池详情", hint: "池、Key 与凭证" }
-  return navigation.find((item) => item.to === route.path) ?? navigation[0]
+  if (route.path.startsWith("/pools/")) return { label: t("layout.page.poolDetail") }
+  return navigation.value.find((item) => item.to === route.path) ?? navigation.value[0]!
 })
 
 const commandResults = computed(() => {
   const query = commandQuery.value.trim().toLocaleLowerCase()
-  if (!query) return navigation
-  return navigation.filter((item) =>
+  if (!query) return navigation.value
+  return navigation.value.filter((item) =>
     `${item.label} ${item.hint}`.toLocaleLowerCase().includes(query),
   )
 })
@@ -159,9 +163,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
 
 <template>
   <div class="app-shell">
-    <aside class="workspace-nav" aria-label="主导航">
-      <RouterLink class="brand" to="/" aria-label="TavilyMux 首页">
-        <img class="brand__logo" src="/tavily-mux.svg" alt="" width="34" height="34" />
+    <aside class="workspace-nav" :aria-label="t('layout.nav.main')">
+      <RouterLink class="brand" to="/" :aria-label="t('layout.brandHome')">
+        <BrandLogo class="brand__logo" />
         <span class="brand__name">TavilyMux</span>
       </RouterLink>
 
@@ -180,34 +184,43 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
       </nav>
 
       <div class="workspace-nav__footer">
-        <div class="admin-chip" aria-label="当前管理员">
-          <span class="admin-chip__avatar">A</span>
-          <span><strong>Admin</strong><small>系统管理员</small></span>
+        <div class="admin-chip" :aria-label="t('layout.adminCurrent')">
+          <span class="admin-chip__avatar">
+            A
+            <span
+              class="admin-chip__status"
+              role="img"
+              :aria-label="t('layout.serviceHealthy')"
+              :title="t('layout.serviceHealthy')"
+            ></span>
+          </span>
+          <span
+            ><strong>Admin</strong><small>{{ t("common.admin") }}</small></span
+          >
         </div>
         <button class="nav-action" type="button" @click="logout">
           <LogOut :size="17" />
-          <span>退出登录</span>
+          <span>{{ t("layout.logout") }}</span>
         </button>
       </div>
     </aside>
 
     <div class="workspace">
       <header class="workspace-bar">
-        <RouterLink class="mobile-brand" to="/" aria-label="TavilyMux 首页">
-          <img class="brand__logo" src="/tavily-mux.svg" alt="" width="32" height="32" />
+        <RouterLink class="mobile-brand" to="/" :aria-label="t('layout.brandHome')">
+          <BrandLogo class="brand__logo" :size="32" />
           <span>TavilyMux</span>
         </RouterLink>
         <div class="workspace-context">
           <strong>{{ currentPage.label }}</strong>
         </div>
-        <button class="command-trigger" type="button" @click="openCommand">
-          <Search :size="16" aria-hidden="true" />
-          <span>搜索页面或操作</span>
-          <kbd><Command :size="12" /> K</kbd>
-        </button>
-        <div class="workspace-bar__status">
-          <span></span>
-          <strong>服务正常</strong>
+        <div class="workspace-bar__tools">
+          <button class="command-trigger" type="button" @click="openCommand">
+            <Search :size="16" aria-hidden="true" />
+            <span>{{ t("layout.command.search") }}</span>
+            <kbd><Command :size="12" /> K</kbd>
+          </button>
+          <WorkspacePreferences />
         </div>
       </header>
 
@@ -219,7 +232,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
         </RouterView>
       </main>
 
-      <nav class="mobile-nav" aria-label="移动端主导航">
+      <nav class="mobile-nav" :aria-label="t('layout.nav.mobile')">
         <RouterLink
           v-for="item in navigation"
           :key="item.to"
@@ -240,7 +253,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
           class="command-palette"
           role="dialog"
           aria-modal="true"
-          aria-label="页面与操作搜索"
+          :aria-label="t('layout.command.label')"
           @keydown="onCommandKeydown"
         >
           <div class="command-palette__search">
@@ -250,15 +263,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
               v-model="commandQuery"
               type="search"
               autocomplete="off"
-              aria-label="搜索页面或操作"
-              placeholder="输入页面名称…"
+              :aria-label="t('layout.command.search')"
+              :placeholder="t('layout.command.placeholder')"
             />
-            <button type="button" aria-label="关闭搜索" @click="closeCommand">
+            <button type="button" :aria-label="t('layout.command.close')" @click="closeCommand">
               <X :size="17" />
             </button>
           </div>
           <div class="command-palette__body">
-            <p>快速前往</p>
+            <p>{{ t("layout.command.go") }}</p>
             <button
               v-for="item in commandResults"
               :key="item.to"
@@ -275,12 +288,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
               <ChevronRight :size="16" aria-hidden="true" />
             </button>
             <p v-if="commandResults.length === 0" class="command-palette__empty">
-              没有匹配的页面
+              {{ t("layout.command.empty") }}
             </p>
           </div>
           <footer>
-            <span><kbd>↑</kbd><kbd>↓</kbd> 浏览</span>
-            <span><kbd>Enter</kbd> 打开 · <kbd>Esc</kbd> 关闭</span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> {{ t("layout.command.browse") }}</span>
+            <span
+              ><kbd>Enter</kbd> {{ t("layout.command.open") }} · <kbd>Esc</kbd>
+              {{ t("layout.command.close") }}</span
+            >
           </footer>
         </section>
       </div>

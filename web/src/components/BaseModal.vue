@@ -2,6 +2,10 @@
 import { X } from "lucide-vue-next"
 import { nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from "vue"
 
+import { useI18n } from "../i18n"
+
+const { t } = useI18n()
+
 const props = withDefaults(
   defineProps<{
     open: boolean
@@ -121,7 +125,7 @@ onBeforeUnmount(() => {
               v-if="dismissible"
               class="icon-button"
               type="button"
-              aria-label="关闭弹窗"
+              :aria-label="t('common.close')"
               @click="requestClose"
             >
               <X :size="18" />

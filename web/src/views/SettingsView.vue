@@ -7,12 +7,14 @@ import LoadingSkeleton from "../components/LoadingSkeleton.vue"
 import PageHeader from "../components/PageHeader.vue"
 import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
+import { useI18n } from "../i18n"
 import { useAuthStore } from "../stores/auth"
 import { useToastStore } from "../stores/toasts"
 import type { ConnectionTest, SystemSettings } from "../types/api"
 import { formatLatency } from "../utils/format"
 
 const settings = ref<SystemSettings | null>(null)
+const { t } = useI18n()
 const { initialized, run: runLoad, showSkeleton } = useLoadingBoundary()
 const saving = ref(false)
 const testing = ref(false)
@@ -45,7 +47,7 @@ async function load(): Promise<void> {
       })
       error.value = ""
     } catch (cause) {
-      error.value = errorMessage(cause, "设置加载失败")
+      error.value = errorMessage(cause, t("settings.loadError"))
     }
   })
 }
@@ -69,9 +71,9 @@ async function save(): Promise<void> {
     proxyTouched.https = false
     form.http_proxy = ""
     form.https_proxy = ""
-    toasts.show("连接与运行设置已保存", "success")
+    toasts.show(t("settings.saved"), "success")
   } catch (cause) {
-    error.value = errorMessage(cause, "设置保存失败，请检查地址格式")
+    error.value = errorMessage(cause, t("settings.saveError"))
   } finally {
     saving.value = false
   }
@@ -79,7 +81,7 @@ async function save(): Promise<void> {
 
 async function changeSecret(): Promise<void> {
   if (secretForm.new_secret !== secretForm.confirm) {
-    toasts.show("两次输入的新密钥不一致", "error")
+    toasts.show(t("settings.secretMismatch"), "error")
     return
   }
   try {
@@ -90,7 +92,7 @@ async function changeSecret(): Promise<void> {
     auth.authenticated = false
     window.location.assign("/login")
   } catch (cause) {
-    toasts.show(errorMessage(cause, "管理密钥修改失败"), "error")
+    toasts.show(errorMessage(cause, t("settings.secretUpdateError")), "error")
   }
 }
 
@@ -99,16 +101,16 @@ async function testConnection(): Promise<void> {
   try {
     const result = (await api.post<ConnectionTest>("/settings/test")).data
     connectionResult.value = result
-    const route = result.proxy_configured ? "已配置代理" : "直连"
+    const route = result.proxy_configured ? t("settings.proxyConfigured") : t("settings.direct")
     toasts.show(
       result.ok
-        ? `${result.message} · ${route} · ${formatLatency(result.latency_ms)}`
-        : `${result.message} · ${formatLatency(result.latency_ms)}`,
+        ? `${t("settings.connectionSuccess")} · ${route} · ${formatLatency(result.latency_ms)}`
+        : `${t("settings.connectionFailed")} · ${formatLatency(result.latency_ms)}`,
       result.ok ? "success" : "error",
     )
   } catch (cause) {
     connectionResult.value = null
-    toasts.show(errorMessage(cause, "连接测试失败"), "error")
+    toasts.show(errorMessage(cause, t("settings.connectionFailed")), "error")
   } finally {
     testing.value = false
   }
@@ -125,23 +127,25 @@ onMounted(load)
 <template>
   <div class="view-stack">
     <PageHeader
-      title="连接设置"
-      description="配置服务访问 Tavily 时使用的地址、Clash HTTP 代理和运行参数。"
+      :title="t('settings.title')"
+      :description="t('settings.connectionDescription')"
     />
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="error && !settings" class="inline-error">
       <p>{{ error }}</p>
-      <UiButton @click="load">重新加载</UiButton>
+      <UiButton @click="load">{{ t("common.retry") }}</UiButton>
     </div>
     <template v-else-if="initialized">
       <form class="panel settings-form" @submit.prevent="save">
         <div class="section-heading section-heading--stack-mobile">
           <div>
-            <h2>上游连接</h2>
-            <p>代理地址是 Clash 等服务暴露的 HTTP URL，不是 VPN 配置文件。</p>
+            <h2>{{ t("settings.upstreamTitle") }}</h2>
+            <p>{{ t("settings.proxyUrlHint") }}</p>
           </div>
           <UiButton :disabled="testing" @click="testConnection">
-            <Cable :size="16" />{{ testing ? "正在测试…" : "测试已保存连接" }}
+            <Cable :size="16" />{{
+              testing ? t("settings.testRunning") : t("settings.connectionTest")
+            }}
           </UiButton>
         </div>
         <label class="field"
@@ -151,52 +155,54 @@ onMounted(load)
             type="url"
             required
             placeholder="https://api.tavily.com"
-          /><small>搜索请求会原样转发到这个地址下的 /search。</small></label
+          /><small>{{ t("settings.upstreamHint") }}</small></label
         >
         <div class="form-grid">
           <div class="field">
-            <label for="global-http-proxy">HTTP 代理</label>
+            <label for="global-http-proxy">{{ t("form.httpProxy") }}</label>
             <input
               id="global-http-proxy"
               v-model.trim="form.http_proxy"
               type="url"
               :placeholder="settings?.http_proxy || 'http://127.0.0.1:7890'"
               @input="proxyTouched.http = true"
-            /><small v-if="settings?.http_proxy && !proxyTouched.http"
-              >当前：{{ settings.http_proxy }}</small
+            /><small v-if="settings?.http_proxy && !proxyTouched.http">{{
+              t("common.current", { value: settings.http_proxy })
+            }}</small
             ><button
               v-if="settings?.http_proxy"
               class="field-action"
               type="button"
               @click="clearProxy('http')"
             >
-              清除已保存代理
+              {{ t("settings.clearProxy") }}
             </button>
           </div>
           <div class="field">
-            <label for="global-https-proxy">HTTPS 代理</label>
+            <label for="global-https-proxy">{{ t("form.httpsProxy") }}</label>
             <input
               id="global-https-proxy"
               v-model.trim="form.https_proxy"
               type="url"
               :placeholder="settings?.https_proxy || 'http://127.0.0.1:7890'"
               @input="proxyTouched.https = true"
-            /><small v-if="settings?.https_proxy && !proxyTouched.https"
-              >当前：{{ settings.https_proxy }}</small
+            /><small v-if="settings?.https_proxy && !proxyTouched.https">{{
+              t("common.current", { value: settings.https_proxy })
+            }}</small
             ><button
               v-if="settings?.https_proxy"
               class="field-action"
               type="button"
               @click="clearProxy('https')"
             >
-              清除已保存代理
+              {{ t("settings.clearProxy") }}
             </button>
           </div>
         </div>
         <label class="switch-field switch-field--warning"
           ><input v-model="form.allow_direct_fallback" type="checkbox" /><span
-            ><strong>代理失败时允许直连</strong
-            ><small>默认关闭。开启后代理连接失败可能使流量绕过代理。</small></span
+            ><strong>{{ t("settings.allowDirect") }}</strong
+            ><small>{{ t("settings.allowDirectHint") }}</small></span
           ></label
         >
         <div
@@ -207,11 +213,19 @@ onMounted(load)
         >
           <component :is="connectionResult.ok ? CheckCircle2 : CircleAlert" :size="19" />
           <div>
-            <strong>{{ connectionResult.message }}</strong>
+            <strong>{{
+              connectionResult.ok
+                ? t("settings.connectionSuccess")
+                : t("settings.connectionFailed")
+            }}</strong>
             <span>
-              {{ connectionResult.proxy_configured ? "经已配置代理" : "直连" }} ·
-              {{ formatLatency(connectionResult.latency_ms) }} · HTTP
-              {{ connectionResult.status_code ?? "未响应" }}
+              {{
+                connectionResult.proxy_configured
+                  ? t("settings.proxyRoute")
+                  : t("settings.direct")
+              }}
+              · {{ formatLatency(connectionResult.latency_ms) }} · HTTP
+              {{ connectionResult.status_code ?? t("common.noResponse") }}
             </span>
           </div>
         </div>
@@ -219,37 +233,37 @@ onMounted(load)
         <div class="section-divider"></div>
         <div class="section-heading">
           <div>
-            <h2>运行参数</h2>
-            <p>全局默认值可被单个账号池覆盖。</p>
+            <h2>{{ t("settings.runtimeTitle") }}</h2>
+            <p>{{ t("settings.runtimeDescription") }}</p>
           </div>
         </div>
         <div class="form-grid form-grid--four">
           <label class="field"
-            ><span>检测间隔（秒）</span
+            ><span>{{ t("form.monitorInterval") }}</span
             ><input
               v-model.number="form.monitor_interval_seconds"
               type="number"
               min="60"
               max="86400" /></label
           ><label class="field"
-            ><span>请求超时（秒）</span
+            ><span>{{ t("settings.requestTimeout") }}</span
             ><input
               v-model.number="form.request_timeout_seconds"
               type="number"
               min="1"
               max="600" /></label
           ><label class="field"
-            ><span>最大尝试次数</span
+            ><span>{{ t("form.maxAttempts") }}</span
             ><input v-model.number="form.max_attempts" type="number" min="1" max="10" /></label
           ><label class="field"
-            ><span>日志保留（天）</span
+            ><span>{{ t("settings.logRetention") }}</span
             ><input v-model.number="form.log_retention_days" type="number" min="1" max="3650"
           /></label>
         </div>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <div class="form-actions">
           <UiButton variant="primary" type="submit" :disabled="saving">
-            <Save :size="17" />{{ saving ? "正在保存…" : "保存并应用" }}
+            <Save :size="17" />{{ saving ? t("settings.saving") : t("settings.save") }}
           </UiButton>
         </div>
       </form>
@@ -257,21 +271,21 @@ onMounted(load)
       <form class="panel settings-form" @submit.prevent="changeSecret">
         <div class="section-heading">
           <div>
-            <h2>管理密钥</h2>
-            <p>修改后所有现有登录会话立即失效。</p>
+            <h2>{{ t("settings.adminKey") }}</h2>
+            <p>{{ t("settings.adminKeyHint") }}</p>
           </div>
           <Shield :size="22" aria-hidden="true" />
         </div>
         <div class="form-grid form-grid--three">
           <label class="field"
-            ><span>当前管理密钥</span
+            ><span>{{ t("settings.currentKey") }}</span
             ><input
               v-model="secretForm.current_secret"
               :type="secretVisible ? 'text' : 'password'"
               required
               autocomplete="current-password" /></label
           ><label class="field"
-            ><span>新管理密钥</span
+            ><span>{{ t("settings.newKey") }}</span
             ><input
               v-model="secretForm.new_secret"
               :type="secretVisible ? 'text' : 'password'"
@@ -279,7 +293,7 @@ onMounted(load)
               minlength="12"
               autocomplete="new-password" /></label
           ><label class="field"
-            ><span>确认新密钥</span
+            ><span>{{ t("settings.newKeyConfirm") }}</span
             ><input
               v-model="secretForm.confirm"
               :type="secretVisible ? 'text' : 'password'"
@@ -292,10 +306,12 @@ onMounted(load)
           ><input v-model="secretVisible" type="checkbox" /><component
             :is="secretVisible ? EyeOff : Eye"
             :size="15"
-          /><span>{{ secretVisible ? "隐藏密钥" : "显示密钥" }}</span></label
+          /><span>{{
+            secretVisible ? t("settings.hideKey") : t("settings.showKey")
+          }}</span></label
         >
         <div class="form-actions">
-          <UiButton type="submit">修改管理密钥</UiButton>
+          <UiButton type="submit">{{ t("settings.adminKeyChanged") }}</UiButton>
         </div>
       </form>
     </template>

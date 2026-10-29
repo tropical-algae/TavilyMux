@@ -2,9 +2,12 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-vue-next"
 import { computed, ref } from "vue"
 
+import { currentLocale, useI18n } from "../i18n"
 import BaseModal from "./BaseModal.vue"
 import SelectControl from "./SelectControl.vue"
 import UiButton from "./UiButton.vue"
+
+const { t } = useI18n()
 
 interface CalendarCell {
   key: string
@@ -39,7 +42,7 @@ const selectedMonth = ref(viewMonth.value)
 const selectedDay = ref(now.getDate())
 const draftHour = ref("00")
 const draftMinute = ref("00")
-const weekdays = ["一", "二", "三", "四", "五", "六", "日"]
+const weekdays = computed(() => t("datetime.weekdays").split(","))
 
 const hourOptions = Array.from({ length: 24 }, (_, hour) => {
   const value = String(hour).padStart(2, "0")
@@ -51,12 +54,20 @@ const minuteOptions = Array.from({ length: 60 }, (_, minute) => {
 })
 
 const displayValue = computed(() => {
-  if (!props.modelValue) return "选择日期与时间"
-  const [date, time = ""] = props.modelValue.split("T")
-  return `${date?.replaceAll("-", "/")} ${time}`.trim()
+  if (!props.modelValue) return t("datetime.choose")
+  return new Intl.DateTimeFormat(currentLocale(), {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(props.modelValue))
 })
 
-const monthLabel = computed(() => `${viewYear.value} 年 ${viewMonth.value + 1} 月`)
+const monthLabel = computed(() =>
+  t("datetime.month", { year: viewYear.value, month: viewMonth.value + 1 }),
+)
 
 const calendarDays = computed<CalendarCell[]>(() => {
   const today = new Date()
@@ -151,7 +162,7 @@ function clear(): void {
       :id="id"
       class="datetime-control__trigger"
       type="button"
-      :aria-label="ariaLabel || '选择日期与时间'"
+      :aria-label="ariaLabel || t('datetime.choose')"
       :disabled="disabled"
       @click="openPicker"
     >
@@ -161,18 +172,22 @@ function clear(): void {
 
     <BaseModal
       :open="open"
-      :title="ariaLabel || '选择日期与时间'"
-      description="选择日期后设置精确到分钟的时间。"
+      :title="ariaLabel || t('datetime.choose')"
+      :description="t('datetime.description')"
       size="small"
       @close="open = false"
     >
       <div class="date-picker">
         <div class="date-picker__toolbar">
-          <button type="button" aria-label="上一个月" @click="changeMonth(-1)">
+          <button
+            type="button"
+            :aria-label="t('datetime.previousMonth')"
+            @click="changeMonth(-1)"
+          >
             <ChevronLeft :size="17" />
           </button>
           <strong>{{ monthLabel }}</strong>
-          <button type="button" aria-label="下一个月" @click="changeMonth(1)">
+          <button type="button" :aria-label="t('datetime.nextMonth')" @click="changeMonth(1)">
             <ChevronRight :size="17" />
           </button>
         </div>
@@ -191,25 +206,35 @@ function clear(): void {
               'date-picker__day--selected': isSelected(cell),
             }"
             :aria-selected="isSelected(cell)"
-            :aria-label="`${cell.year} 年 ${cell.month + 1} 月 ${cell.day} 日`"
+            :aria-label="
+              t('datetime.dateAria', { year: cell.year, month: cell.month + 1, day: cell.day })
+            "
             @click="selectDay(cell)"
           >
             {{ cell.day }}
           </button>
         </div>
         <div class="date-picker__time">
-          <span>时间</span>
+          <span>{{ t("datetime.time") }}</span>
           <div>
-            <SelectControl v-model="draftHour" :options="hourOptions" aria-label="小时" />
+            <SelectControl
+              v-model="draftHour"
+              :options="hourOptions"
+              :aria-label="t('datetime.hours')"
+            />
             <strong>:</strong>
-            <SelectControl v-model="draftMinute" :options="minuteOptions" aria-label="分钟" />
+            <SelectControl
+              v-model="draftMinute"
+              :options="minuteOptions"
+              :aria-label="t('datetime.minutes')"
+            />
           </div>
         </div>
       </div>
       <template #footer>
-        <UiButton variant="ghost" @click="clear">清除</UiButton>
-        <UiButton @click="selectToday">今天</UiButton>
-        <UiButton variant="primary" @click="confirm">确定</UiButton>
+        <UiButton variant="ghost" @click="clear">{{ t("common.clear") }}</UiButton>
+        <UiButton @click="selectToday">{{ t("datetime.today") }}</UiButton>
+        <UiButton variant="primary" @click="confirm">{{ t("common.confirm") }}</UiButton>
       </template>
     </BaseModal>
   </div>

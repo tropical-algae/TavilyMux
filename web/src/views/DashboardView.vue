@@ -12,11 +12,13 @@ import SelectControl from "../components/SelectControl.vue"
 import StatusBadge from "../components/StatusBadge.vue"
 import UiButton from "../components/UiButton.vue"
 import { useLoadingBoundary } from "../composables/useLoadingBoundary"
+import { useI18n } from "../i18n"
 import { useToastStore } from "../stores/toasts"
 import type { CreatedPool, Dashboard, Pool, RoutingStrategy } from "../types/api"
 import { formatDate, formatLatency, formatNumber } from "../utils/format"
 
 const dashboard = ref<Dashboard | null>(null)
+const { t } = useI18n()
 const pools = ref<Pool[]>([])
 const { loading, run: runLoad, showSkeleton } = useLoadingBoundary()
 const saving = ref(false)
@@ -25,10 +27,10 @@ const loadError = ref("")
 const formError = ref("")
 const created = ref<CreatedPool | null>(null)
 const toasts = useToastStore()
-const routingOptions = [
-  { value: "max_remaining", label: "剩余额度优先" },
-  { value: "random", label: "随机可用 Key" },
-]
+const routingOptions = computed(() => [
+  { value: "max_remaining", label: t("form.routingMaxRemaining") },
+  { value: "random", label: t("form.routingRandom") },
+])
 const form = reactive({
   name: "",
   description: "",
@@ -65,7 +67,7 @@ async function load(): Promise<void> {
       pools.value = poolResponse.data
       loadError.value = ""
     } catch (cause) {
-      loadError.value = errorMessage(cause, "账号池数据加载失败")
+      loadError.value = errorMessage(cause, t("dashboard.loadError"))
     }
   })
 }
@@ -101,10 +103,10 @@ async function createPool(): Promise<void> {
     form.http_proxy = ""
     form.https_proxy = ""
     form.allow_direct_fallback = false
-    toasts.show("账号池已创建，请立即保存中转 Key", "success")
+    toasts.show(t("dashboard.created"), "success")
     await load()
   } catch (cause) {
-    formError.value = errorMessage(cause, "账号池创建失败")
+    formError.value = errorMessage(cause, t("dashboard.createError"))
   } finally {
     saving.value = false
   }
@@ -115,9 +117,9 @@ async function copyKey(): Promise<void> {
   try {
     if (!navigator.clipboard) throw new Error("Clipboard API unavailable")
     await navigator.clipboard.writeText(created.value.relay_key)
-    toasts.show("中转 Key 已复制", "success")
+    toasts.show(t("dashboard.copied"), "success")
   } catch {
-    toasts.show("自动复制失败，请手动选择上方完整 Key", "error")
+    toasts.show(t("common.copyFailed"), "error")
   }
 }
 
@@ -126,19 +128,19 @@ onMounted(load)
 
 <template>
   <div class="view-stack pools-workspace">
-    <PageHeader title="账号池" description="查看运行状态并管理路由池、Tavily Key 与中转凭证。">
+    <PageHeader :title="t('dashboard.title')" :description="t('dashboard.description')">
       <template #actions>
         <UiButton
           class="button--icon-mobile"
           :disabled="loading"
-          aria-label="刷新账号池"
+          :aria-label="t('common.refresh')"
           @click="load"
         >
           <RefreshCw :size="16" :class="{ spin: loading }" />
-          <span>刷新</span>
+          <span>{{ t("common.refresh") }}</span>
         </UiButton>
         <UiButton variant="primary" @click="createOpen = true">
-          <Plus :size="17" />创建账号池
+          <Plus :size="17" />{{ t("dashboard.create") }}
         </UiButton>
       </template>
     </PageHeader>
@@ -146,85 +148,95 @@ onMounted(load)
     <LoadingSkeleton v-if="showSkeleton" :rows="7" />
     <div v-else-if="loadError" class="inline-error" role="alert">
       <div>
-        <strong>无法加载账号池</strong>
+        <strong>{{ t("dashboard.loadErrorTitle") }}</strong>
         <p>{{ loadError }}</p>
       </div>
-      <UiButton @click="load">重新加载</UiButton>
+      <UiButton @click="load">{{ t("common.retry") }}</UiButton>
     </div>
 
     <template v-else-if="dashboard">
-      <section class="metric-line" aria-label="核心运行指标">
+      <section class="metric-line" :aria-label="t('dashboard.metricLabel')">
         <div>
-          <span>健康账号池</span>
+          <span>{{ t("dashboard.healthyPools") }}</span>
           <strong
             >{{ dashboard.healthy_pool_count
-            }}<small>/{{ dashboard.pool_count }}</small></strong
+            }}<small> / {{ dashboard.pool_count }}</small></strong
           >
           <p>
             {{
               dashboard.degraded_pool_count
-                ? `${dashboard.degraded_pool_count} 个降级`
-                : "全部可用"
+                ? t("dashboard.degradedCount", { count: dashboard.degraded_pool_count })
+                : t("dashboard.allAvailable")
             }}
           </p>
         </div>
         <div>
-          <span>可用 Tavily Key</span>
+          <span>{{ t("dashboard.availableKeys") }}</span>
           <strong
             >{{ dashboard.available_key_count
-            }}<small>/{{ dashboard.key_count }}</small></strong
+            }}<small> / {{ dashboard.key_count }}</small></strong
           >
-          <p>当前路由候选</p>
+          <p>{{ t("dashboard.currentCandidates") }}</p>
         </div>
         <div>
-          <span>今日请求</span>
+          <span>{{ t("dashboard.requestsToday") }}</span>
           <strong>{{ formatNumber(dashboard.requests_today) }}</strong>
-          <p>{{ formatNumber(dashboard.successes_today) }} 次成功</p>
+          <p>
+            {{
+              t("dashboard.successCount", { count: formatNumber(dashboard.successes_today) })
+            }}
+          </p>
         </div>
         <div>
-          <span>成功率</span>
+          <span>{{ t("dashboard.successRate") }}</span>
           <strong>{{
             dashboard.requests_today ? `${dashboard.success_rate.toFixed(1)}%` : "—"
           }}</strong>
-          <p>按外部请求统计</p>
+          <p>{{ t("dashboard.successRateHint") }}</p>
         </div>
         <div>
-          <span>平均耗时</span>
+          <span>{{ t("dashboard.averageLatency") }}</span>
           <strong>{{ formatLatency(dashboard.average_latency_ms) }}</strong>
-          <p>上游完整响应</p>
+          <p>{{ t("dashboard.upstreamResponse") }}</p>
         </div>
       </section>
 
       <section v-if="created" class="one-time-secret" aria-labelledby="secret-title">
         <div>
-          <h2 id="secret-title">中转 Key 只显示这一次</h2>
-          <p>请保存到调用方的安全配置中，关闭后无法再次查看完整值。</p>
+          <h2 id="secret-title">{{ t("dashboard.secretOnce") }}</h2>
+          <p>{{ t("dashboard.secretHint") }}</p>
         </div>
         <code>{{ created.relay_key }}</code>
         <div class="one-time-secret__actions">
-          <UiButton variant="primary" @click="copyKey"> <Copy :size="16" />复制 Key </UiButton>
-          <UiButton variant="ghost" @click="created = null"> 我已保存 </UiButton>
+          <UiButton variant="primary" @click="copyKey">
+            <Copy :size="16" />{{ t("dashboard.copyKey") }}
+          </UiButton>
+          <UiButton variant="ghost" @click="created = null">
+            {{ t("dashboard.saved") }}
+          </UiButton>
         </div>
       </section>
-      <section v-if="created" class="relay-example" aria-label="Search 调用示例">
+      <section v-if="created" class="relay-example" :aria-label="t('dashboard.searchExample')">
         <div>
-          <strong>立即验证 /search</strong>
-          <span>示例包含刚生成的完整中转 Key，关闭提示前请妥善保存。</span>
+          <strong>{{ t("dashboard.testNow") }}</strong>
+          <span>{{ t("dashboard.testNowHint") }}</span>
         </div>
         <pre><code>{{ searchExample }}</code></pre>
       </section>
 
       <div class="database-toolbar">
-        <strong>全部账号池</strong>
-        <span>{{ pools.length }} 个</span>
+        <strong>{{ t("dashboard.allPools") }}</strong>
+        <span>{{ t("dashboard.poolCount", { count: pools.length }) }}</span>
       </div>
 
       <EmptyState
         v-if="pools.length === 0"
-        title="还没有账号池"
-        description="创建账号池并添加 Tavily Key 后即可开始转发搜索请求。"
+        :title="t('dashboard.empty')"
+        :description="t('dashboard.emptyDescription')"
       >
-        <UiButton variant="primary" @click="createOpen = true"> 创建账号池 </UiButton>
+        <UiButton variant="primary" @click="createOpen = true">
+          {{ t("dashboard.create") }}
+        </UiButton>
       </EmptyState>
       <section v-else class="pool-directory">
         <RouterLink
@@ -240,21 +252,23 @@ onMounted(load)
             ></span>
             <div>
               <strong>{{ pool.name }}</strong>
-              <p>{{ pool.description || "未添加描述" }}</p>
-              <small>最近使用：{{ formatDate(pool.last_used_at) }}</small>
+              <p>{{ pool.description || t("dashboard.noDescription") }}</p>
+              <small>{{
+                t("dashboard.lastUsed", { value: formatDate(pool.last_used_at) })
+              }}</small>
             </div>
           </div>
           <StatusBadge :status="pool.status" />
           <div class="pool-record__metric">
-            <span>可用 Key</span
+            <span>{{ t("pool.overview.availableKeys") }}</span
             ><strong>{{ pool.available_key_count }} / {{ pool.key_count }}</strong>
           </div>
           <div class="pool-record__metric">
-            <span>最高单 Key 可用</span
+            <span>{{ t("dashboard.highestQuota") }}</span
             ><strong>{{ formatNumber(pool.estimated_remaining) }}</strong>
           </div>
           <div class="pool-record__metric">
-            <span>今日请求 / 成功率</span>
+            <span>{{ t("dashboard.requestsAndRate") }}</span>
             <strong
               >{{ formatNumber(pool.requests_today) }} /
               {{ pool.success_rate_today.toFixed(1) }}%</strong
@@ -267,8 +281,8 @@ onMounted(load)
 
     <BaseModal
       :open="createOpen"
-      title="创建账号池"
-      description="建立路由边界后，再向池内添加 Tavily Key。"
+      :title="t('dashboard.create')"
+      :description="t('dashboard.createDescription')"
       size="large"
       :dismissible="!saving"
       @close="createOpen = false"
@@ -276,28 +290,28 @@ onMounted(load)
       <form id="create-pool-form" class="form-panel" @submit.prevent="createPool">
         <div class="form-grid">
           <label class="field">
-            <span>池名称</span>
+            <span>{{ t("dashboard.poolName") }}</span>
             <input
               v-model.trim="form.name"
               required
               maxlength="100"
-              placeholder="例如：生产搜索"
+              :placeholder="t('dashboard.poolNamePlaceholder')"
             />
           </label>
           <div class="field">
-            <span>路由策略</span>
+            <span>{{ t("dashboard.routingStrategy") }}</span>
             <SelectControl v-model="form.strategy" :options="routingOptions" />
           </div>
           <label class="field field--span">
-            <span>描述（可选）</span>
+            <span>{{ t("dashboard.poolDescription") }}</span>
             <textarea
               v-model.trim="form.description"
               rows="2"
-              placeholder="说明这个池服务的调用环境"
+              :placeholder="t('dashboard.poolDescriptionPlaceholder')"
             />
           </label>
           <label class="field">
-            <span>额度检测间隔（秒）</span>
+            <span>{{ t("form.monitorInterval") }}</span>
             <input
               v-model.number="form.monitor_interval_seconds"
               type="number"
@@ -306,33 +320,38 @@ onMounted(load)
             />
           </label>
           <label class="field">
-            <span>最大尝试次数</span>
+            <span>{{ t("form.maxAttempts") }}</span>
             <input v-model.number="form.max_attempts" type="number" min="1" max="10" />
           </label>
           <label class="field">
-            <span>并发上限（可选）</span>
+            <span>{{ t("form.concurrencyLimit") }}</span>
             <input
               v-model.number="form.concurrency_limit"
               type="number"
               min="1"
-              placeholder="不限制"
+              :placeholder="t('common.noLimit')"
             />
           </label>
           <label class="field">
-            <span>每分钟请求上限（可选）</span>
-            <input v-model.number="form.rpm_limit" type="number" min="1" placeholder="不限制" />
+            <span>{{ t("form.rpmLimit") }}</span>
+            <input
+              v-model.number="form.rpm_limit"
+              type="number"
+              min="1"
+              :placeholder="t('common.noLimit')"
+            />
           </label>
         </div>
         <label class="switch-field">
           <input v-model="form.connection_override" type="checkbox" />
           <span
-            ><strong>创建时覆盖全局连接</strong
-            ><small>为这个池指定独立 Tavily 地址或 Clash HTTP 代理。</small></span
+            ><strong>{{ t("dashboard.connectionOverride") }}</strong
+            ><small>{{ t("dashboard.connectionOverrideHint") }}</small></span
           >
         </label>
         <div v-if="form.connection_override" class="form-grid">
           <label class="field field--span">
-            <span>Tavily Base URL（留空继承全局）</span>
+            <span>{{ t("form.tavilyBaseUrl") }}</span>
             <input
               v-model.trim="form.upstream_base_url"
               type="url"
@@ -340,7 +359,7 @@ onMounted(load)
             />
           </label>
           <label class="field">
-            <span>HTTP 代理</span>
+            <span>{{ t("form.httpProxy") }}</span>
             <input
               v-model.trim="form.http_proxy"
               type="url"
@@ -348,7 +367,7 @@ onMounted(load)
             />
           </label>
           <label class="field">
-            <span>HTTPS 代理</span>
+            <span>{{ t("form.httpsProxy") }}</span>
             <input
               v-model.trim="form.https_proxy"
               type="url"
@@ -358,7 +377,8 @@ onMounted(load)
           <label class="switch-field field--span">
             <input v-model="form.allow_direct_fallback" type="checkbox" />
             <span
-              ><strong>代理失败时允许直连</strong><small>可能绕过代理，默认关闭。</small></span
+              ><strong>{{ t("dashboard.directFallback") }}</strong
+              ><small>{{ t("dashboard.directFallbackHint") }}</small></span
             >
           </label>
         </div>
@@ -366,7 +386,7 @@ onMounted(load)
       </form>
       <template #footer>
         <UiButton variant="ghost" :disabled="saving" @click="createOpen = false">
-          取消
+          {{ t("common.cancel") }}
         </UiButton>
         <UiButton
           variant="primary"
@@ -374,7 +394,7 @@ onMounted(load)
           form="create-pool-form"
           :disabled="saving || !form.name"
         >
-          {{ saving ? "正在创建…" : "创建并生成中转 Key" }}
+          {{ saving ? t("dashboard.creating") : t("dashboard.createAndGenerate") }}
         </UiButton>
       </template>
     </BaseModal>

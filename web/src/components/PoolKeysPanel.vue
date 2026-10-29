@@ -2,12 +2,15 @@
 import { BookOpenText, Plus, RefreshCw, Trash2 } from "lucide-vue-next"
 import { RouterLink } from "vue-router"
 
+import { useI18n } from "../i18n"
 import type { TavilyKey } from "../types/api"
 import { formatDate, formatNumber, successRate } from "../utils/format"
 import EmptyState from "./EmptyState.vue"
 import QuotaMeter from "./QuotaMeter.vue"
 import StatusBadge from "./StatusBadge.vue"
 import UiButton from "./UiButton.vue"
+
+const { t } = useI18n()
 
 defineProps<{
   poolId: string
@@ -27,15 +30,17 @@ defineEmits<{
 <template>
   <div class="section-actions">
     <div>
-      <h2>Tavily Keys</h2>
-      <p>真实 Key 只加密保存，页面始终脱敏显示。</p>
+      <h2>{{ t("pool.key.title") }}</h2>
+      <p>{{ t("pool.key.maskedHint") }}</p>
     </div>
-    <UiButton variant="primary" @click="$emit('add')"> <Plus :size="17" />添加 Key </UiButton>
+    <UiButton variant="primary" @click="$emit('add')">
+      <Plus :size="17" />{{ t("pool.key.add") }}
+    </UiButton>
   </div>
   <EmptyState
     v-if="keys.length === 0"
-    title="池里还没有 Tavily Key"
-    description="添加至少一个 Key 后，这个池才能接收搜索请求。"
+    :title="t('pool.key.empty')"
+    :description="t('pool.key.emptyDescription')"
   />
   <section v-else class="table-surface key-table-surface">
     <div class="table-wrap key-table-scroll">
@@ -51,13 +56,13 @@ defineEmits<{
         </colgroup>
         <thead>
           <tr>
-            <th>名称</th>
+            <th>{{ t("pool.key.name") }}</th>
             <th>API Key</th>
-            <th>状态</th>
-            <th>额度</th>
-            <th>成功率</th>
-            <th>最后检测</th>
-            <th>操作</th>
+            <th>{{ t("pool.key.status") }}</th>
+            <th>{{ t("pool.key.quota") }}</th>
+            <th>{{ t("pool.key.successRate") }}</th>
+            <th>{{ t("pool.key.lastCheck") }}</th>
+            <th>{{ t("pool.key.operations") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -77,12 +82,18 @@ defineEmits<{
             <td>
               <div class="quota-cell">
                 <strong class="quota-remaining">
-                  剩余：{{ formatNumber(key.estimated_remaining) }}
-                  <span>（{{ key.account_plan || "未知套餐" }}）</span>
+                  {{
+                    t("pool.key.available", { value: formatNumber(key.estimated_remaining) })
+                  }}
+                  <span>（{{ key.account_plan || t("common.unknownPlan") }}）</span>
                 </strong>
-                <QuotaMeter label="令牌额度" :usage="key.usage" :limit="key.usage_limit" />
                 <QuotaMeter
-                  label="账户额度"
+                  :label="t('pool.key.tokenQuota')"
+                  :usage="key.usage"
+                  :limit="key.usage_limit"
+                />
+                <QuotaMeter
+                  :label="t('pool.key.accountQuota')"
                   :usage="key.account_plan_usage"
                   :limit="key.account_plan_limit"
                 />
@@ -91,13 +102,15 @@ defineEmits<{
             <td>
               <div class="cell-stack">
                 <strong>{{ successRate(key.success_count, key.request_count) }}</strong>
-                <small>{{ key.request_count }} 次请求</small>
+                <small>{{ t("pool.key.requestCount", { count: key.request_count }) }}</small>
               </div>
             </td>
             <td>
               <div class="cell-stack">
                 <strong>{{ formatDate(key.last_checked_at) }}</strong>
-                <small>最后使用：{{ formatDate(key.last_used_at) }}</small>
+                <small>{{
+                  t("pool.key.lastUsed", { value: formatDate(key.last_used_at) })
+                }}</small>
               </div>
             </td>
             <td>
@@ -106,7 +119,7 @@ defineEmits<{
                   class="icon-button"
                   type="button"
                   :disabled="busyKey === key.id"
-                  :aria-label="`检测 ${key.name}`"
+                  :aria-label="t('pool.key.checkLabel', { name: key.name })"
                   @click="$emit('check', key)"
                 >
                   <RefreshCw :size="16" :class="{ spin: busyKey === key.id }" />
@@ -114,18 +127,20 @@ defineEmits<{
                 <RouterLink
                   class="icon-button"
                   :to="`/logs?pool_id=${poolId}&key_id=${key.id}`"
-                  :aria-label="`查看 ${key.name} 的日志`"
+                  :aria-label="t('pool.key.logsLabel', { name: key.name })"
                 >
                   <BookOpenText :size="16" />
                 </RouterLink>
-                <UiButton size="small" @click="$emit('rename', key)">改名</UiButton>
+                <UiButton size="small" @click="$emit('rename', key)">{{
+                  t("common.rename")
+                }}</UiButton>
                 <UiButton size="small" @click="$emit('toggle', key)">
-                  {{ key.enabled ? "停用" : "启用" }}
+                  {{ key.enabled ? t("pool.access.disable") : t("common.enable") }}
                 </UiButton>
                 <button
                   class="icon-button icon-button--danger"
                   type="button"
-                  :aria-label="`删除 ${key.name}`"
+                  :aria-label="t('pool.key.deleteLabel', { name: key.name })"
                   @click="$emit('delete', key)"
                 >
                   <Trash2 :size="16" />

@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import { computed } from "vue"
 
-const props = defineProps<{ status: string }>()
+import { type MessageKey, useI18n } from "../i18n"
 
-const labels: Record<string, string> = {
-  normal: "正常",
-  degraded: "降级",
-  unavailable: "不可用",
-  disabled: "已停用",
-  unknown: "待检测",
-  available: "可用",
-  low_quota: "额度偏低",
-  rate_limited: "临时限流",
-  exhausted: "额度耗尽",
-  invalid: "鉴权失败",
-  check_failed: "检测失败",
+const props = defineProps<{ status: string }>()
+const { t } = useI18n()
+
+const labels: Record<string, MessageKey> = {
+  normal: "status.normal",
+  degraded: "status.degraded",
+  unavailable: "status.unavailable",
+  disabled: "status.disabled",
+  unknown: "status.unknown",
+  available: "status.available",
+  low_quota: "status.low_quota",
+  rate_limited: "status.rate_limited",
+  exhausted: "status.exhausted",
+  invalid: "status.invalid",
+  check_failed: "status.check_failed",
 }
 
 const tone = computed(() => {
@@ -32,6 +35,6 @@ const tone = computed(() => {
 <template>
   <span class="status-badge" :class="`status-badge--${tone}`">
     <span class="status-badge__dot" aria-hidden="true"></span>
-    {{ labels[status] ?? status }}
+    {{ labels[status] ? t(labels[status]) : status }}
   </span>
 </template>

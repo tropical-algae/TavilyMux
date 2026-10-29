@@ -2,6 +2,8 @@
 import { Check, ChevronDown } from "lucide-vue-next"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId } from "vue"
 
+import { t } from "../i18n"
+
 export interface SelectOption {
   value: string
   label: string
@@ -17,7 +19,7 @@ const props = withDefaults(
     ariaLabel?: string
   }>(),
   {
-    placeholder: "请选择",
+    placeholder: undefined,
     disabled: false,
     ariaLabel: undefined,
   },
@@ -139,7 +141,7 @@ onBeforeUnmount(() => window.removeEventListener("pointerdown", onPointerDown))
       @keydown="onTriggerKeydown"
     >
       <span :class="{ 'select-control__placeholder': !selectedOption }">
-        {{ selectedOption?.label ?? placeholder }}
+        {{ selectedOption?.label ?? placeholder ?? t("common.select") }}
       </span>
       <ChevronDown :size="16" aria-hidden="true" />
     </button>
