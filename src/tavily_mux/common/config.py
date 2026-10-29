@@ -11,6 +11,7 @@ from pydantic_settings import (
 )
 
 from tavily_mux import __version__
+from tavily_mux.domain.endpoints import EndpointSettings
 
 CONFIG_FILE_ENV = "TAVILY_MUX_CONFIG_FILE"
 DEFAULT_CONFIG_FILE = Path(os.getenv(CONFIG_FILE_ENV, "config.yaml")).expanduser()
@@ -49,6 +50,7 @@ class Settings(BaseSettings):
     UPSTREAM_MAX_CONNECTIONS: int = 2_000
     UPSTREAM_MAX_KEEPALIVE_CONNECTIONS: int = 500
     USAGE_CHECK_CONCURRENCY: int = 10
+    ENDPOINTS: EndpointSettings = EndpointSettings()
 
     @property
     def database_url(self) -> str:

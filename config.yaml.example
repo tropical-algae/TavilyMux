@@ -3,6 +3,7 @@ PORT: 8080
 DATA_DIR: ./data
 LOG_LEVEL: INFO
 LOG_FORMAT: text
+ACCESS_LOG: false
 COOKIE_SECURE: false
 COOKIE_SAMESITE: lax
 SESSION_MAX_AGE_SECONDS: 86400
@@ -17,3 +18,15 @@ MAX_REQUEST_BODY_BYTES: 10485760
 UPSTREAM_MAX_CONNECTIONS: 2000
 UPSTREAM_MAX_KEEPALIVE_CONNECTIONS: 500
 USAGE_CHECK_CONCURRENCY: 10
+
+# Built-in endpoints can be disabled by name. Custom endpoints transparently
+# forward the same path to Tavily and default to POST (GET is also supported).
+ENDPOINTS:
+  # Available values: search, extract, crawl, map, research, feedback.
+  # Disabling research disables both POST /research and GET /research/{request_id}.
+  disabled: []
+  custom: []
+  # custom:
+  #   - path: /future-endpoint
+  #   - path: /future-get
+  #     method: GET
