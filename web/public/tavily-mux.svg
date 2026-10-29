@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="logo-title">
+  <title id="logo-title">tavily-mux</title>
+  <rect width="512" height="512" rx="96" fill="#000000"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="134" cy="261" r="40"/>
+    <path d="M174 261H212"/>
+    <path d="M212 261C247 261 267 239 277 210S305 171 329 171H414"/>
+    <path d="M368 125L414 171L368 217"/>
+    <path d="M212 261C248 261 267 284 277 319S301 359 320 359"/>
+    <path d="M354 323L418 387M418 323L354 387" stroke="#b15140ff"/>
+  </g>
+</svg>

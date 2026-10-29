@@ -119,28 +119,12 @@ button,
   padding: 0 6px;
 }
 
-.brand__mark {
-  position: relative;
-  display: grid;
+.brand__logo {
+  display: block;
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
-  place-items: center;
-  color: var(--text-on-solid);
-  background: var(--text);
   border-radius: var(--radius-control);
-}
-
-.brand__mark::after {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 9px;
-  height: 9px;
-  content: "";
-  background: var(--accent);
-  border: 2px solid var(--sidebar);
-  border-radius: 50%;
 }
 
 .workspace-bar__status > span {
@@ -2772,7 +2756,7 @@ tbody tr:hover {
     font-size: 0;
   }
 
-  .mobile-brand .brand__mark {
+  .mobile-brand .brand__logo {
     width: 32px;
     height: 32px;
   }

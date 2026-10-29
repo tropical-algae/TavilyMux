@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, KeyRound, LockKeyhole } from "lucide-vue-next"
+import { ArrowRight, LockKeyhole } from "lucide-vue-next"
 import { ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 
@@ -34,7 +34,7 @@ async function submit(): Promise<void> {
   <main class="login-page">
     <section class="login-intro" aria-labelledby="login-title">
       <div class="login-brand" aria-label="TavilyMux">
-        <span class="brand__mark" aria-hidden="true"><KeyRound :size="18" /></span>
+        <img class="brand__logo" src="/tavily-mux.svg" alt="" width="34" height="34" />
         <span>TavilyMux</span>
       </div>
       <div>

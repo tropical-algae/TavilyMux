@@ -3,6 +3,7 @@ import { extname, join } from "node:path"
 import { chromium } from "playwright"
 
 const root = new URL("../dist/", import.meta.url).pathname
+const publicRoot = new URL("../public/", import.meta.url).pathname
 const output = new URL("../../.artifacts/ui/", import.meta.url).pathname
 mkdirSync(output, { recursive: true })
 
@@ -247,6 +248,13 @@ async function installRoutes(page, authenticated) {
         status: 200,
         contentType: contentType(path),
         body: readFileSync(path),
+      })
+    }
+    if (url.pathname === "/tavily-mux.svg") {
+      return route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: readFileSync(join(publicRoot, "tavily-mux.svg")),
       })
     }
     return route.fulfill({

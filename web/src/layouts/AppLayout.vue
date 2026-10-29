@@ -3,7 +3,6 @@ import {
   BookOpenText,
   ChevronRight,
   Command,
-  KeyRound,
   LogOut,
   Network,
   Search,
@@ -162,7 +161,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
   <div class="app-shell">
     <aside class="workspace-nav" aria-label="主导航">
       <RouterLink class="brand" to="/" aria-label="TavilyMux 首页">
-        <span class="brand__mark"><KeyRound :size="18" :stroke-width="1.9" /></span>
+        <img class="brand__logo" src="/tavily-mux.svg" alt="" width="34" height="34" />
         <span class="brand__name">TavilyMux</span>
       </RouterLink>
 
@@ -195,7 +194,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown))
     <div class="workspace">
       <header class="workspace-bar">
         <RouterLink class="mobile-brand" to="/" aria-label="TavilyMux 首页">
-          <span class="brand__mark"><KeyRound :size="17" /></span>
+          <img class="brand__logo" src="/tavily-mux.svg" alt="" width="32" height="32" />
           <span>TavilyMux</span>
         </RouterLink>
         <div class="workspace-context">
