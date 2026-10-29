@@ -10,6 +10,11 @@ export default defineConfig({
       "/livez": "http://127.0.0.1:8080",
       "/readyz": "http://127.0.0.1:8080",
       "/search": "http://127.0.0.1:8080",
+      "/extract": "http://127.0.0.1:8080",
+      "/crawl": "http://127.0.0.1:8080",
+      "/map": "http://127.0.0.1:8080",
+      "/research": "http://127.0.0.1:8080",
+      "/feedback": "http://127.0.0.1:8080",
     },
   },
 })
