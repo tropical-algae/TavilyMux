@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.2.0 (2026-10-30)
+
+### Documentation
+
+- **readme**: Add theme-aware branding
+  ([`f064f3c`](https://github.com/tropical-algae/TavilyMux/commit/f064f3cdc51edb367f0b27040adc3cd4f883cb26))
+
+### Features
+
+- **web**: Add localization and theme preferences
+  ([`05930f4`](https://github.com/tropical-algae/TavilyMux/commit/05930f48902eec8bd043272181383b302e9ecf32))
+
+
 ## v0.1.0 (2026-10-29)
 
 ### Bug Fixes
