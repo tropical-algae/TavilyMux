@@ -24,7 +24,13 @@ TavilyMux 将多个 Tavily Key 组织成相互隔离的账号池，并提供兼�
 
 服务会按池内规则选择可用 Key，在上游请求失败时执行受控切换，同时提供额度监控、请求日志和 Web 管理控制台
 
-![preview](docs/assert/preview.png)
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assert/preview-cn-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/assert/preview-cn-light.png" />
+    <img src="docs/assert/preview-en-light.png" alt="preview-cn-light" />
+  </picture>
+</div>
 
 ## 特性说明
 

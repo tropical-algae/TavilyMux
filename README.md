@@ -24,7 +24,13 @@ TavilyMux organizes multiple Tavily keys into isolated account pools and provide
 
 The service selects an available key according to each pool's routing policy, performs controlled failover when an upstream request fails, and includes quota monitoring, request logs, and a Web management console.
 
-![preview](docs/assert/preview.png)
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assert/preview-en-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/assert/preview-en-light.png" />
+    <img src="docs/assert/preview-en-light.png" alt="preview-en-light" />
+  </picture>
+</div>
 
 ## Features
 
