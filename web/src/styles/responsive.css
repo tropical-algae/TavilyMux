@@ -546,19 +546,6 @@
     font-size: var(--font-size-sm);
   }
 
-  .filter-actions {
-    position: sticky;
-    bottom: -14px;
-    width: 100%;
-    justify-self: stretch;
-    padding: 12px 0 0;
-    background: var(--surface);
-  }
-
-  .filter-actions .button--primary {
-    flex: 1;
-  }
-
   .log-entry__summary {
     min-height: 70px;
     grid-template-columns: 18px minmax(0, 1fr) 48px 52px;

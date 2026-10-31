@@ -239,7 +239,17 @@ async function installRoutes(page, authenticated) {
       }
       if (url.pathname === "/api/v1/pools/pool-primary") return json(route, pools[0])
       if (url.pathname === "/api/v1/pools") return json(route, pools)
-      if (url.pathname === "/api/v1/logs") return json(route, logs)
+      if (url.pathname === "/api/v1/logs") {
+        const keyId = url.searchParams.get("key_id")
+        if (keyId) {
+          return json(route, {
+            ...logs,
+            total: 1,
+            items: [{ ...logs.items[0], pool_id: "pool-primary", final_key_id: keyId }],
+          })
+        }
+        return json(route, logs)
+      }
       return json(route, {})
     }
     if (url.pathname.startsWith("/assets/")) {
@@ -400,6 +410,29 @@ try {
       await page.locator(".key-table-scroll").evaluate((element) => {
         element.scrollLeft = element.scrollWidth
       })
+    },
+  )
+  await capture(
+    browser,
+    "pool-key-logs-navigation-desktop",
+    { width: 1440, height: 1000 },
+    "/pools/pool-primary",
+    true,
+    async (page) => {
+      await page.getByRole("tab", { name: "Tavily Keys" }).click()
+      const filteredRequest = page.waitForRequest((request) => {
+        const url = new URL(request.url())
+        return (
+          url.pathname === "/api/v1/logs" &&
+          url.searchParams.get("pool_id") === "pool-primary" &&
+          url.searchParams.get("key_id") === "key-primary"
+        )
+      })
+      await Promise.all([
+        filteredRequest,
+        page.getByRole("link", { name: "查看 生产主 Key 的日志" }).click(),
+      ])
+      await page.getByText("共 1 条").waitFor()
     },
   )
   await capture(

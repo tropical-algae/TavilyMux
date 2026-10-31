@@ -153,7 +153,6 @@ export const zhCN = {
   "logs.allPools": "全部账号池",
   "logs.allRequests": "全部请求",
   "logs.allResults": "全部结果",
-  "logs.apply": "应用筛选",
   "logs.closeFilters": "关闭筛选",
   "logs.description": "每条外部调用关联其内部 Key 尝试，不保存请求正文。",
   "logs.empty": "没有符合条件的请求",
@@ -549,7 +548,6 @@ export const en: Record<MessageKey, string> = {
   "logs.allPools": "All pools",
   "logs.allRequests": "All requests",
   "logs.allResults": "All results",
-  "logs.apply": "Apply filters",
   "logs.closeFilters": "Close filters",
   "logs.description":
     "Each external request is linked to its internal key attempts. Request bodies are not stored.",

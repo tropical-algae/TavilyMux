@@ -29,19 +29,6 @@
   gap: 6px;
 }
 
-.filter-bar .button {
-  align-self: end;
-}
-
-.filter-actions {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: end;
-  justify-content: flex-end;
-  justify-self: end;
-  gap: 7px;
-}
-
 .log-stream {
   overflow: hidden;
 }
