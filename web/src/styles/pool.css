@@ -398,11 +398,14 @@ tbody tr:hover {
 
 .quota-cell {
   display: grid;
+  grid-template-columns: max-content minmax(180px, 1fr);
   min-width: 280px;
-  gap: 7px;
+  column-gap: 8px;
+  row-gap: 7px;
 }
 
 .quota-remaining {
+  grid-column: 1 / -1;
   color: var(--text);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
@@ -416,9 +419,9 @@ tbody tr:hover {
 
 .quota-meter {
   display: grid;
-  grid-template-columns: 60px 200px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 8px;
 }
 
 .quota-meter > span {
