@@ -19,8 +19,8 @@ from tavily_mux.runtime.snapshot_loader import RuntimeSnapshotLoader
 @pytest.fixture
 def runtime(tmp_path: Path) -> Iterator[tuple[RuntimeRegistry, str]]:
     database_url = f"sqlite:///{tmp_path / 'runtime.db'}"
-    upgrade_database(database_url)
     database = Database(database_url)
+    upgrade_database(database.engine)
     secret_manager = SecretManager(Fernet.generate_key())
     relay_id, relay_secret, relay_token = generate_relay_key()
     with database.session() as session:

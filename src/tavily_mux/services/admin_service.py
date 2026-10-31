@@ -1,7 +1,5 @@
 import secrets
-from pathlib import Path
 
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from tavily_mux.common.config import Settings
@@ -11,8 +9,7 @@ from tavily_mux.common.security import (
     hash_admin_secret,
     verify_admin_secret,
 )
-from tavily_mux.persistence.database import Database
-from tavily_mux.persistence.migrate import upgrade_database
+from tavily_mux.persistence.initialize import initialize_database
 from tavily_mux.persistence.models import AdminCredential
 from tavily_mux.services.errors import AuthenticationError
 
@@ -23,22 +20,17 @@ def reset_admin_secret(settings: Settings, requested_secret: str | None = None) 
         raise ValueError("The management key must contain at least 12 characters")
 
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    database_url = make_url(settings.database_url)
-    database_existed = bool(
-        database_url.drivername.startswith("sqlite")
-        and database_url.database
-        and database_url.database != ":memory:"
-        and Path(database_url.database).exists()
+    initialization = initialize_database(
+        settings.database_url,
+        auto_migrate=settings.AUTO_MIGRATE,
     )
-    SecretManager.load(
-        settings.DATA_DIR,
-        settings.MASTER_KEY,
-        refuse_generation=database_existed,
-    )
-    if settings.AUTO_MIGRATE:
-        upgrade_database(settings.database_url)
-    database = Database(settings.database_url)
+    database = initialization.database
     try:
+        SecretManager.load(
+            settings.DATA_DIR,
+            settings.MASTER_KEY,
+            refuse_generation=initialization.schema_existed,
+        )
         with database.session() as session:
             admin = session.get(AdminCredential, 1)
             if admin is None:

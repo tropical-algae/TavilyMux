@@ -1,14 +1,12 @@
 from dataclasses import dataclass
-from pathlib import Path
 
 from loguru import logger
-from sqlalchemy.engine import make_url
 
 from tavily_mux.common.config import Settings
 from tavily_mux.common.security import SecretManager, generate_admin_secret, hash_admin_secret
 from tavily_mux.integrations.tavily import TavilyClientManager
 from tavily_mux.persistence.database import Database
-from tavily_mux.persistence.migrate import upgrade_database
+from tavily_mux.persistence.initialize import initialize_database
 from tavily_mux.persistence.models import AdminCredential, SystemSettings
 from tavily_mux.runtime.registry import RuntimeRegistry
 from tavily_mux.runtime.snapshot_loader import RuntimeSnapshotLoader
@@ -46,33 +44,32 @@ class ApplicationContext:
 
 def bootstrap_application(settings: Settings) -> ApplicationContext:
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    database_url = make_url(settings.database_url)
-    database_existed = bool(
-        database_url.drivername.startswith("sqlite")
-        and database_url.database
-        and database_url.database != ":memory:"
-        and Path(database_url.database).exists()
+    initialization = initialize_database(
+        settings.database_url,
+        auto_migrate=settings.AUTO_MIGRATE,
     )
-    secrets = SecretManager.load(
-        settings.DATA_DIR,
-        settings.MASTER_KEY,
-        refuse_generation=database_existed,
-    )
-    if settings.AUTO_MIGRATE:
-        upgrade_database(settings.database_url)
+    database = initialization.database
+    try:
+        secrets = SecretManager.load(
+            settings.DATA_DIR,
+            settings.MASTER_KEY,
+            refuse_generation=initialization.schema_existed,
+        )
 
-    database = Database(settings.database_url)
-    with database.session() as session:
-        admin = session.get(AdminCredential, 1)
-        if admin is None:
-            admin_secret = settings.ADMIN_SECRET or generate_admin_secret()
-            admin = AdminCredential(id=1, secret_hash=hash_admin_secret(admin_secret))
-            session.add(admin)
-            if not settings.ADMIN_SECRET:
-                logger.warning("Generated initial admin secret: {}", admin_secret)
-        if session.get(SystemSettings, 1) is None:
-            session.add(SystemSettings(id=1))
-        session.commit()
+        with database.session() as session:
+            admin = session.get(AdminCredential, 1)
+            if admin is None:
+                admin_secret = settings.ADMIN_SECRET or generate_admin_secret()
+                admin = AdminCredential(id=1, secret_hash=hash_admin_secret(admin_secret))
+                session.add(admin)
+                if not settings.ADMIN_SECRET:
+                    logger.warning("Generated initial admin secret: {}", admin_secret)
+            if session.get(SystemSettings, 1) is None:
+                session.add(SystemSettings(id=1))
+            session.commit()
+    except Exception:
+        database.close()
+        raise
 
     events = EventWriter(database, queue_size=settings.EVENT_QUEUE_SIZE)
     runtime = RuntimeRegistry(
